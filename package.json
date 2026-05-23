@@ -29,7 +29,7 @@
     "LICENSE"
   ],
   "bin": {
-    "bangala": "./dist/cli.js"
+    "bangala": "dist/cli.js"
   },
   "exports": {
     ".": {
