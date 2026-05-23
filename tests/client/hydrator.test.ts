@@ -20,7 +20,7 @@ function fakeLoader(modules: Record<string, unknown>): Loader {
 describe("hydrate — nominal flow", () => {
   it("imports the entry and awaits mount(el, props, ctx)", async () => {
     const el = mountIsland({ entry: "./X", props: '{"n":42}' });
-    const mount = vi.fn(async () => {});
+    const mount = vi.fn(async (_el: HTMLElement, _props: unknown, _ctx: unknown) => {});
     hydrateWith(fakeLoader({ "./X": { mount } }));
     await nextTick();
 

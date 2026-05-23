@@ -10,7 +10,7 @@ export type ScanResult =
 
 export function scan(root: ParentNode): ScanResult[] {
   const out: ScanResult[] = [];
-  for (const el of root.querySelectorAll<HTMLElement>(SELECTOR)) {
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>(SELECTOR))) {
     out.push(parseOne(el));
   }
   return out;
