@@ -1,4 +1,4 @@
-import type { Template, TemplateNode } from "./types.js";
+import type { Template, TemplateNode, Attribute } from "./types.js";
 
 export class ParseError extends Error {
   constructor(message: string, public line: number, public column: number) {
@@ -62,11 +62,21 @@ class Scanner {
         if (!nested) this.error("Unexpected closing token");
         break;
       }
+      if (this.startsWith("<!--")) {
+        const end = this.src.indexOf("-->", this.pos);
+        if (end === -1) this.error("Unclosed comment");
+        this.pos = end + 3;
+        continue;
+      }
+      if (this.src[this.pos] === "<") {
+        nodes.push(this.parseTag());
+        continue;
+      }
       if (this.src[this.pos] === "{") {
         nodes.push(this.parseExpression());
         continue;
       }
-      // Future tasks add: comments, tags, blocks.
+      // Future tasks add: blocks.
       nodes.push(this.parseText());
     }
     return nodes;
@@ -96,6 +106,79 @@ class Scanner {
 
   private parseExpression(): TemplateNode {
     return { type: "Expression", code: this.readBraced() };
+  }
+
+  private skipWhitespace(): void {
+    while (!this.eof() && /\s/.test(this.src[this.pos]!)) this.pos++;
+  }
+
+  private readName(): string {
+    const start = this.pos;
+    while (!this.eof() && /[A-Za-z0-9:-]/.test(this.src[this.pos]!)) this.pos++;
+    if (this.pos === start) this.error("Expected a tag or attribute name");
+    return this.src.slice(start, this.pos);
+  }
+
+  private parseAttributes(): { attributes: Attribute[]; selfClosing: boolean } {
+    const attributes: Attribute[] = [];
+    while (!this.eof()) {
+      this.skipWhitespace();
+      if (this.startsWith("/>")) {
+        this.pos += 2;
+        return { attributes, selfClosing: true };
+      }
+      if (this.src[this.pos] === ">") {
+        this.pos++;
+        return { attributes, selfClosing: false };
+      }
+      const name = this.readName();
+      if (this.src[this.pos] === "=") {
+        this.pos++;
+        if (this.src[this.pos] === "{") {
+          attributes.push({ name, value: this.readBraced(), dynamic: true });
+        } else {
+          const quote = this.src[this.pos];
+          if (quote !== '"' && quote !== "'") this.error("Expected quoted attribute value");
+          this.pos++;
+          const end = this.src.indexOf(quote, this.pos);
+          if (end === -1) this.error("Unclosed attribute value");
+          attributes.push({ name, value: this.src.slice(this.pos, end), dynamic: false });
+          this.pos = end + 1;
+        }
+      } else {
+        // Valueless attribute / directive (e.g. client:load).
+        attributes.push({ name, value: "", dynamic: false });
+      }
+    }
+    this.error("Unclosed tag");
+  }
+
+  private parseTag(): TemplateNode {
+    this.pos++; // consume "<"
+    const tag = this.readName();
+    const { attributes, selfClosing } = this.parseAttributes();
+    const isComponent = /^[A-Z]/.test(tag);
+    if (isComponent) {
+      return this.finishComponent(tag, attributes, selfClosing);
+    }
+    if (selfClosing || VOID_ELEMENTS.has(tag)) {
+      return { type: "Element", tag, attributes, children: [] };
+    }
+    const children = this.parseNodes(true);
+    const close = `</${tag}>`;
+    if (!this.startsWith(close)) this.error(`Unclosed <${tag}>`);
+    this.pos += close.length;
+    return { type: "Element", tag, attributes, children };
+  }
+
+  private finishComponent(
+    tag: string,
+    attributes: Attribute[],
+    selfClosing: boolean,
+  ): TemplateNode {
+    // Replaced with full implementation in Task 8.
+    void selfClosing;
+    return { type: "Element", tag, attributes, children: [] };
   }
 
   private parseText(): TemplateNode {

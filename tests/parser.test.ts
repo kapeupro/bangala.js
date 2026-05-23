@@ -29,3 +29,36 @@ describe("parse — expressions", () => {
     ]);
   });
 });
+
+describe("parse — elements", () => {
+  it("parses an element with static and dynamic attributes", () => {
+    expect(parse(`<div id="main" class={cls}>hi</div>`).nodes).toEqual([
+      {
+        type: "Element",
+        tag: "div",
+        attributes: [
+          { name: "id", value: "main", dynamic: false },
+          { name: "class", value: "cls", dynamic: true },
+        ],
+        children: [{ type: "Text", value: "hi" }],
+      },
+    ]);
+  });
+
+  it("parses a self-closing void element", () => {
+    expect(parse("<br/>").nodes).toEqual([
+      { type: "Element", tag: "br", attributes: [], children: [] },
+    ]);
+  });
+
+  it("skips HTML comments", () => {
+    expect(parse("a<!-- note -->b").nodes).toEqual([
+      { type: "Text", value: "a" },
+      { type: "Text", value: "b" },
+    ]);
+  });
+
+  it("errors on an unclosed element", () => {
+    expect(() => parse("<div>")).toThrow(/Unclosed <div>/);
+  });
+});
