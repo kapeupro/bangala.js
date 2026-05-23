@@ -1,14 +1,24 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { gzipSync } from "node:zlib";
 import {
   applyDeployAdapter,
   createDeployAdapter,
   listDeployAdapters,
   type DeployAdapter,
 } from "./adapters.js";
+import {
+  banner,
+  buildSummary,
+  color,
+  devSummary,
+  nextStepsBlock,
+} from "./cli-format.js";
+import { findFreePort } from "./cli-net.js";
 import { buildBangala, createBangalaDevServer } from "./vite.js";
 
 export interface CliIO {
@@ -112,7 +122,7 @@ export async function createProject(
 async function runDev(args: string[], io: CliIO): Promise<void> {
   const parsed = parseArgs(args, {
     values: ["root", "pages", "host", "port"],
-    booleans: ["help", "no-inject-client"],
+    booleans: ["help", "no-inject-client", "open"],
   });
   if (parsed.booleans.has("help")) {
     print(io, devHelpText());
@@ -122,8 +132,14 @@ async function runDev(args: string[], io: CliIO): Promise<void> {
   const root = resolve(io.cwd ?? process.cwd(), option(parsed, "root") ?? ".");
   const pages = option(parsed, "pages") ?? "pages";
   const host = option(parsed, "host") ?? "127.0.0.1";
-  const port = numberOption(parsed, "port", DEFAULT_PORT);
   const injectClient = !parsed.booleans.has("no-inject-client");
+  const shouldOpen = parsed.booleans.has("open");
+
+  const explicitPort = optionalNumberOption(parsed, "port");
+  const requestedPort = explicitPort ?? DEFAULT_PORT;
+  const port = explicitPort !== undefined
+    ? explicitPort
+    : await findFreePort(DEFAULT_PORT);
 
   const server = await createBangalaDevServer({
     root,
@@ -134,7 +150,20 @@ async function runDev(args: string[], io: CliIO): Promise<void> {
 
   await server.listen(port);
   const url = server.resolvedUrls?.local[0] ?? `http://${host}:${port}/`;
-  print(io, `bangala dev server running at ${url}`);
+  const network = server.resolvedUrls?.network[0];
+
+  print(io, banner(VERSION));
+  print(
+    io,
+    devSummary({
+      url,
+      network,
+      pages,
+      portChangedFrom: port !== requestedPort ? requestedPort : undefined,
+    }),
+  );
+
+  if (shouldOpen) openBrowser(url);
 }
 
 async function runBuild(args: string[], io: CliIO): Promise<void> {
@@ -149,6 +178,8 @@ async function runBuild(args: string[], io: CliIO): Promise<void> {
 
   const root = resolve(io.cwd ?? process.cwd(), option(parsed, "root") ?? ".");
   const outDir = option(parsed, "out-dir") ?? option(parsed, "outDir") ?? "dist";
+
+  const t0 = Date.now();
   const result = await buildBangala({
     root,
     pages: option(parsed, "pages") ?? "pages",
@@ -157,6 +188,7 @@ async function runBuild(args: string[], io: CliIO): Promise<void> {
     client: !parsed.booleans.has("no-client"),
     injectClient: !parsed.booleans.has("no-inject-client"),
   });
+  const durationMs = Date.now() - t0;
 
   const adapterName = option(parsed, "adapter");
   if (adapterName) {
@@ -167,9 +199,34 @@ async function runBuild(args: string[], io: CliIO): Promise<void> {
     });
   }
 
+  // Keep the plain machine-readable line so existing tests / scripts keep working.
   print(
     io,
     `built ${result.pages.length} page(s) to ${relative(root, result.outDir) || "."}`,
+  );
+
+  let clientBytes: number | undefined;
+  let clientGzipBytes: number | undefined;
+  if (result.clientEntry) {
+    try {
+      clientBytes = statSync(result.clientEntry).size;
+      const contents = await readFile(result.clientEntry);
+      clientGzipBytes = gzipSync(contents).length;
+    } catch {
+      // Bundle file may not exist if a custom Vite config redirected output;
+      // skip the size line rather than crashing the CLI.
+    }
+  }
+
+  print(
+    io,
+    buildSummary({
+      pages: result.pages.length,
+      outDir: relative(root, result.outDir) || ".",
+      durationMs,
+      clientBytes,
+      clientGzipBytes,
+    }),
   );
 }
 
@@ -195,8 +252,12 @@ async function runCreate(args: string[], io: CliIO): Promise<void> {
     adapter: option(parsed, "adapter") ?? false,
   });
 
-  print(io, `created ${relative(io.cwd ?? process.cwd(), result.root) || "."}`);
+  const displayPath = relative(io.cwd ?? process.cwd(), result.root) || ".";
+  // Plain status line preserved for tests/scripts that grep for "created ...".
+  print(io, `created ${displayPath}`);
   if (result.adapter) print(io, `configured ${result.adapter.name} deploy adapter`);
+  print(io, "");
+  print(io, nextStepsBlock(displayPath));
 }
 
 async function runDeploy(args: string[], io: CliIO): Promise<void> {
@@ -286,6 +347,33 @@ function numberOption(parsed: ParsedArgs, name: string, fallback: number): numbe
   return parsedValue;
 }
 
+function optionalNumberOption(parsed: ParsedArgs, name: string): number | undefined {
+  const value = option(parsed, name);
+  if (value === undefined) return undefined;
+  const parsedValue = Number(value);
+  if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+    throw new Error(`--${name} must be a positive integer`);
+  }
+  return parsedValue;
+}
+
+function openBrowser(url: string): void {
+  const cmd = process.platform === "darwin"
+    ? "open"
+    : process.platform === "win32"
+      ? "start"
+      : "xdg-open";
+  try {
+    const child = spawn(cmd, [url], { detached: true, stdio: "ignore" });
+    child.on("error", () => {
+      // Best effort: don't crash if the OS handler is missing.
+    });
+    child.unref();
+  } catch {
+    // Best effort: never let a failing browser open kill the dev server.
+  }
+}
+
 async function writeProjectFile(
   root: string,
   file: string,
@@ -306,17 +394,18 @@ function templateFiles(name: string, version: string): { path: string; contents:
       path: "package.json",
       contents: `${JSON.stringify({
         name,
+        version: "0.0.0",
         private: true,
         type: "module",
         scripts: {
           dev: "bangala dev",
-          build: "bangala build",
+          build: "bangala build --out-dir _site",
+          preview: "bangala build --out-dir _site && npx serve _site",
         },
         dependencies: {
           bangala: `^${version}`,
         },
         devDependencies: {
-          typescript: "^5.7.0",
           vite: "^7.3.3",
         },
       }, null, 2)}\n`,
@@ -325,7 +414,8 @@ function templateFiles(name: string, version: string): { path: string; contents:
       path: "pages/index.bangala",
       contents:
         `---\n` +
-        `const title = props.title ?? "bangala.js"\n` +
+        `import Counter from "../components/Counter.bangala"\n` +
+        `const title = "Welcome to bangala.js"\n` +
         `---\n` +
         `<!doctype html>\n` +
         `<html lang="en">\n` +
@@ -333,30 +423,139 @@ function templateFiles(name: string, version: string): { path: string; contents:
         `  <meta charset="utf-8"/>\n` +
         `  <meta name="viewport" content="width=device-width, initial-scale=1"/>\n` +
         `  <title>{title}</title>\n` +
+        `  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>\n` +
         `  <link rel="stylesheet" href="/styles.css"/>\n` +
         `</head>\n` +
         `<body>\n` +
         `  <main>\n` +
-        `    <p class="eyebrow">HTML-first</p>\n` +
+        `    <p class="eyebrow">HTML-first · islands on demand</p>\n` +
         `    <h1>{title}</h1>\n` +
-        `    <p>Build fast pages first, then add islands only where interaction is needed.</p>\n` +
+        `    <p class="lede">\n` +
+        `      This page is static HTML. The counter below is the only piece of JavaScript on this page —\n` +
+        `      it hydrates as soon as the runtime sees it. Click it.\n` +
+        `    </p>\n` +
+        `\n` +
+        `    <bangala-island\n` +
+        `      data-entry="/islands/Counter.client.js"\n` +
+        `      data-props={JSON.stringify({ start: 0 })}\n` +
+        `      data-strategy="load">\n` +
+        `      <Counter start={0}/>\n` +
+        `    </bangala-island>\n` +
+        `\n` +
+        `    <p class="hint">Edit <code>pages/index.bangala</code> and save — the dev server picks it up.</p>\n` +
         `  </main>\n` +
         `</body>\n` +
         `</html>\n`,
     },
     {
+      path: "components/Counter.bangala",
+      contents:
+        `---\n` +
+        `// SSR shell for the Counter island. The button label is rendered on the server\n` +
+        `// so users see the initial value before any JavaScript runs.\n` +
+        `// The interactive behaviour lives in public/islands/Counter.client.js.\n` +
+        `const start = props.start ?? 0\n` +
+        `---\n` +
+        `<button class="counter" type="button">Counter: {start}</button>\n`,
+    },
+    {
+      path: "public/islands/Counter.client.js",
+      contents:
+        `// bangala island: Counter\n` +
+        `// Strategy: client:load — hydrates immediately on page load.\n` +
+        `// Props: { start?: number }\n` +
+        `\n` +
+        `export async function mount(el, props) {\n` +
+        `  const button = el.querySelector("button");\n` +
+        `  if (!button) throw new Error("Counter island: missing <button> child");\n` +
+        `  let count = typeof props?.start === "number" ? props.start : 0;\n` +
+        `  const render = () => {\n` +
+        `    button.textContent = \`Counter: \${count}\`;\n` +
+        `  };\n` +
+        `  render();\n` +
+        `  button.addEventListener("click", () => {\n` +
+        `    count += 1;\n` +
+        `    render();\n` +
+        `  });\n` +
+        `}\n`,
+    },
+    {
+      path: "public/favicon.svg",
+      contents: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#f97316"/><text x="16" y="22" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="800" text-anchor="middle" fill="#fff">b</text></svg>\n`,
+    },
+    {
       path: "public/styles.css",
       contents:
-        `:root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#161616;background:#fafafa}\n` +
-        `body{margin:0;min-height:100vh;display:grid;place-items:center}\n` +
-        `main{width:min(720px,calc(100vw - 48px));padding:64px 0}\n` +
-        `.eyebrow{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#d65f00}\n` +
-        `h1{font-size:clamp(42px,8vw,88px);line-height:.95;margin:0 0 24px;letter-spacing:0}\n` +
-        `p{font-size:20px;line-height:1.6;color:#444;max-width:560px}\n`,
+        `:root {\n` +
+        `  color-scheme: dark;\n` +
+        `  --bg: #0b0b0d;\n` +
+        `  --fg: #e7e7ea;\n` +
+        `  --muted: #9a9aa3;\n` +
+        `  --accent: #f97316;\n` +
+        `  --card: #16161a;\n` +
+        `  --border: #26262d;\n` +
+        `  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;\n` +
+        `  background: var(--bg);\n` +
+        `  color: var(--fg);\n` +
+        `}\n` +
+        `* { box-sizing: border-box; }\n` +
+        `body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px; }\n` +
+        `main { width: 100%; max-width: 720px; }\n` +
+        `.eyebrow {\n` +
+        `  font-size: 12px; font-weight: 700; letter-spacing: 0.16em;\n` +
+        `  text-transform: uppercase; color: var(--accent); margin: 0 0 12px;\n` +
+        `}\n` +
+        `h1 { font-size: clamp(36px, 6vw, 56px); line-height: 1.05; margin: 0 0 16px; letter-spacing: -0.02em; }\n` +
+        `.lede { font-size: 18px; line-height: 1.6; color: var(--muted); margin: 0 0 28px; }\n` +
+        `.hint { font-size: 14px; color: var(--muted); margin-top: 24px; }\n` +
+        `.hint code { background: var(--card); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; }\n` +
+        `button.counter {\n` +
+        `  font: inherit; font-size: 16px; font-weight: 600; cursor: pointer;\n` +
+        `  background: var(--accent); color: #1a0f00; border: 0; padding: 12px 20px;\n` +
+        `  border-radius: 10px; transition: transform 0.06s ease, filter 0.15s ease;\n` +
+        `}\n` +
+        `button.counter:hover { filter: brightness(1.06); }\n` +
+        `button.counter:active { transform: translateY(1px); }\n`,
+    },
+    {
+      path: "README.md",
+      contents:
+        `# ${name}\n` +
+        `\n` +
+        `A starter [bangala.js](https://github.com/kapeupro/bangala) project. HTML first, islands on demand.\n` +
+        `\n` +
+        `## Get going\n` +
+        `\n` +
+        `\`\`\`sh\n` +
+        `npm install\n` +
+        `npm run dev\n` +
+        `\`\`\`\n` +
+        `\n` +
+        `Open http://localhost:5173/ — click the counter and watch the number go up. That's a single\n` +
+        `interactive island; the rest of the page is plain static HTML.\n` +
+        `\n` +
+        `## The four files that matter\n` +
+        `\n` +
+        `- \`pages/index.bangala\` — the home page. Static markup plus a \`<bangala-island>\` marker that\n` +
+        `  embeds the SSR shell and tells the runtime where to find the JS.\n` +
+        `- \`components/Counter.bangala\` — the **SSR shell** for the counter island. It renders the\n` +
+        `  initial button on the server so users see the starting value before any JS runs.\n` +
+        `- \`public/islands/Counter.client.js\` — the **interactive code**. Exports \`mount(el, props)\`.\n` +
+        `  Files under \`public/\` are served as-is, so the marker can reach this at\n` +
+        `  \`/islands/Counter.client.js\`.\n` +
+        `- \`public/styles.css\` — global styles.\n` +
+        `\n` +
+        `## Build\n` +
+        `\n` +
+        `\`\`\`sh\n` +
+        `npm run build\n` +
+        `\`\`\`\n` +
+        `\n` +
+        `Emits a static site to \`_site/\`. Use \`npm run preview\` to serve it locally.\n`,
     },
     {
       path: ".gitignore",
-      contents: `node_modules/\ndist/\n.env\n`,
+      contents: `node_modules/\ndist/\n_site/\n.DS_Store\n`,
     },
   ];
 }
@@ -374,7 +573,7 @@ function helpText(): string {
     `bangala ${VERSION}`,
     "",
     "Usage:",
-    "  bangala dev [--root DIR] [--pages DIR] [--host HOST] [--port PORT]",
+    "  bangala dev [--root DIR] [--pages DIR] [--host HOST] [--port PORT] [--open]",
     "  bangala build [--root DIR] [--pages DIR] [--out-dir DIR] [--prerender PATH]",
     "  bangala create [DIR] [--adapter NAME] [--force]",
     "  bangala deploy <adapter> [--root DIR] [--out-dir DIR] [--force]",
@@ -395,7 +594,8 @@ function devHelpText(): string {
     "  --root DIR             Project root (default: .)",
     "  --pages DIR            Pages directory (default: pages)",
     "  --host HOST            Host (default: 127.0.0.1)",
-    "  --port PORT            Port (default: 5173)",
+    "  --port PORT            Port (default: 5173, auto-picks next free if busy)",
+    "  --open                 Open the dev URL in the default browser",
     "  --no-inject-client     Do not inject bangala/client/auto",
   ].join("\n");
 }

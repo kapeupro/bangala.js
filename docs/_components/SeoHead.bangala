@@ -36,4 +36,4 @@ const absoluteImage = BASE_URL + image;
 <meta name="robots" content="index, follow"/>
 
 <!-- JSON-LD structured data -->
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"bangala.js","description":"bangala.js is an HTML-first framework with a compiler, islands runtime, file-based routing, Vite build helpers, and CLI.","codeRepository":"https://github.com/kapeupro/bangala.js","programmingLanguage":{"@type":"ComputerLanguage","name":"JavaScript"},"license":"https://opensource.org/licenses/MIT","version":"0.4.0"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"bangala.js","description":"bangala.js is an HTML-first framework with a compiler, islands runtime, file-based routing, Vite build helpers, and CLI.","codeRepository":"https://github.com/kapeupro/bangala.js","programmingLanguage":{"@type":"ComputerLanguage","name":"JavaScript"},"license":"https://opensource.org/licenses/MIT","version":"0.5.0"}</script>

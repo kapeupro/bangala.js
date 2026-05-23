@@ -7,7 +7,7 @@
 ### The full-stack framework that ships minimal JavaScript.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![npm](https://img.shields.io/badge/npm-v0.4.0-blue.svg)](https://www.npmjs.com/package/bangala)
+[![npm](https://img.shields.io/badge/npm-v0.5.0-blue.svg)](https://www.npmjs.com/package/bangala)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 </div>
@@ -34,7 +34,7 @@ only travels to the client where you explicitly ask for it.
 
 ## Status
 
-v0.4.0 ships **sub-project 1** (the `.bangala` compiler and server runtime),
+v0.5.0 ships **sub-project 1** (the `.bangala` compiler and server runtime),
 **sub-project 2** (the client islands runtime), **sub-project 3**
 (file-based routing), and **sub-project 4** (Vite dev server + build helpers).
 It also ships **sub-project 5**: CLI, scaffolding, and deploy adapters. Design specs live under
@@ -348,7 +348,7 @@ alongside them are free to evolve.
 ## Roadmap
 
 bangala.js is structured as five sub-projects, each with its own spec/plan
-cycle. v0.4.0 delivers all five planned v1 foundations:
+cycle. v0.5.0 delivers all five planned v1 foundations:
 
 | # | Sub-project | Status |
 |---|---|---|
@@ -356,7 +356,7 @@ cycle. v0.4.0 delivers all five planned v1 foundations:
 | 2 | Client islands runtime | Shipped in v0.1.0 |
 | 3 | File-based routing | Shipped in v0.2.0 |
 | 4 | Dev server + build (Vite) | Shipped in v0.3.0 |
-| 5 | CLI + scaffolding + deploy adapters | Shipped in v0.4.0 |
+| 5 | CLI + scaffolding + deploy adapters | Shipped in v0.5.0 |
 
 Designs live in [`docs/superpowers/specs/`](./docs/superpowers/specs).
 

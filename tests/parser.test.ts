@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parse } from "../src/parser.js";
+import { parse, ParseError } from "../src/parser.js";
 
 describe("parse — frontmatter", () => {
   it("extracts the frontmatter block", () => {
@@ -203,5 +203,69 @@ describe("parse — blocks", () => {
 
   it("errors on an unclosed {#if}", () => {
     expect(() => parse("{#if ok}yes")).toThrow(/Unclosed \{#if\}/);
+  });
+});
+
+describe("parse — pedagogic errors", () => {
+  function caught(source: string): ParseError {
+    try {
+      parse(source);
+    } catch (error) {
+      if (error instanceof ParseError) return error;
+      throw error;
+    }
+    throw new Error("expected parse to throw");
+  }
+
+  it("ParseError exposes the source and offset so callers can render context", () => {
+    const err = caught("<div>");
+    expect(err).toBeInstanceOf(ParseError);
+    expect(err.source).toBe("<div>");
+    expect(typeof err.offset).toBe("number");
+    expect(err.reason).toMatch(/Unclosed <div>/);
+  });
+
+  it("format() includes the source line, a caret marker, and a suggestion", () => {
+    const err = caught("<div>");
+    const rich = err.format();
+    expect(rich).toContain("ParseError:");
+    expect(rich).toContain("<div>");
+    expect(rich).toContain("^");
+    expect(rich).toContain("Suggested:");
+  });
+
+  it("format() suggests the three valid directives for an unknown client: directive", () => {
+    const err = caught("<Counter client:hover/>");
+    const rich = err.format();
+    expect(rich).toContain("Unknown directive");
+    expect(rich).toContain("client:load");
+    expect(rich).toContain("client:idle");
+    expect(rich).toContain("client:visible");
+  });
+
+  it("format() suggests adding a condition for an empty {#if}", () => {
+    const err = caught("{#if}body{/if}");
+    const rich = err.format();
+    expect(rich).toContain("{#if condition}");
+  });
+
+  it("format() suggests the {#each list as item} shape", () => {
+    const err = caught("{#each items}body{/each}");
+    const rich = err.format();
+    expect(rich).toContain("{#each list as item}");
+  });
+
+  it("format() surfaces neighbouring lines so errors are easy to locate", () => {
+    const source = "<main>\n  <h1>Hi</h1>\n  {#if}\n  <p>x</p>\n</main>";
+    const err = caught(source);
+    const rich = err.format();
+    expect(rich).toContain("<h1>Hi</h1>");
+    expect(rich).toContain("{#if}");
+    expect(rich).toContain("<p>x</p>");
+  });
+
+  it("keeps .message short so existing error matchers still work", () => {
+    const err = caught("<div>");
+    expect(err.message).toBe("Unclosed <div> (line 1, column 6)");
   });
 });

@@ -1,10 +1,83 @@
 import type { Template, TemplateNode, Attribute } from "./types.js";
 
+/**
+ * Pedagogic error thrown by the parser. `message` keeps the short form
+ * ("X (line N, column N)") so existing test matchers and consumers stay
+ * stable; call `format()` to get the rich rendering with the source line,
+ * a caret marker, and a suggestion when one is available.
+ */
 export class ParseError extends Error {
-  constructor(message: string, public line: number, public column: number) {
+  public reason: string;
+
+  constructor(
+    message: string,
+    public line: number,
+    public column: number,
+    public source = "",
+    public offset = 0,
+  ) {
     super(`${message} (line ${line}, column ${column})`);
     this.name = "ParseError";
+    this.reason = message;
   }
+
+  /** Returns a multi-line rendering: header, source context, caret, suggestion. */
+  format(): string {
+    const header = `ParseError: ${this.reason} (line ${this.line}, column ${this.column})`;
+    const context = renderSourceContext(this.source, this.line, this.column);
+    const suggestion = suggestFor(this.reason);
+    const parts = [header];
+    if (context) parts.push("", context);
+    if (suggestion) parts.push("", `Suggested: ${suggestion}`);
+    return parts.join("\n");
+  }
+}
+
+/** Small table of common parse errors → human-friendly fixes. */
+const SUGGESTIONS: { match: (reason: string) => boolean; suggestion: string }[] = [
+  {
+    match: (r) => r === "{#if} requires a condition",
+    suggestion: "write '{#if condition}' — e.g. '{#if user.isAdmin}'",
+  },
+  {
+    match: (r) => r.startsWith("Unclosed <"),
+    suggestion: "add a matching closing tag, e.g. '</div>'",
+  },
+  {
+    match: (r) => r === "Expected quoted attribute value",
+    suggestion: "quote the value: e.g. id=\"main\" or use a dynamic id={value}",
+  },
+  {
+    match: (r) => r.startsWith("Unknown directive"),
+    suggestion: "valid directives: client:load, client:idle, client:visible",
+  },
+  {
+    match: (r) => r.startsWith("{#each} must be"),
+    suggestion: "use '{#each list as item}' — e.g. '{#each posts as post}'",
+  },
+];
+
+function suggestFor(reason: string): string | null {
+  for (const entry of SUGGESTIONS) {
+    if (entry.match(reason)) return entry.suggestion;
+  }
+  return null;
+}
+
+function renderSourceContext(source: string, line: number, column: number): string {
+  if (!source) return "";
+  const lines = source.split("\n");
+  const idx = line - 1;
+  if (idx < 0 || idx >= lines.length) return "";
+  const gutter = (n: number) => String(n).padStart(3, " ");
+  const out: string[] = [];
+  if (idx > 0) out.push(`${gutter(line - 1)} | ${lines[idx - 1]}`);
+  const target = lines[idx] ?? "";
+  out.push(`${gutter(line)} | ${target}`);
+  const caretPad = " ".repeat(Math.max(0, column - 1));
+  out.push(`${" ".repeat(3)} | ${caretPad}^`);
+  if (idx + 1 < lines.length) out.push(`${gutter(line + 1)} | ${lines[idx + 1]}`);
+  return out.join("\n");
 }
 
 const VOID_ELEMENTS = new Set([
@@ -53,7 +126,7 @@ class Scanner {
         column++;
       }
     }
-    throw new ParseError(message, line, column);
+    throw new ParseError(message, line, column, this.full, idx);
   }
 
   /** Parse nodes until a closing token. `nested` is true inside a block/element. */

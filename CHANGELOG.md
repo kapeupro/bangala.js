@@ -2,6 +2,24 @@
 
 All notable changes to bangala.js are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-05-23
+
+### Added
+
+- **CLI polish.** Colored terminal output (honors `NO_COLOR` / `FORCE_COLOR`), banner, clickable URLs via OSC 8 hyperlinks, build timing, runtime bundle size (raw + gzip).
+- **`bangala dev --open`** opens the dev URL in the default browser after the server starts.
+- **Automatic port picking.** When `--port` is not set, `bangala dev` finds the next free port starting from 5173. An explicit `--port` is still respected.
+- **Pedagogic parser errors.** `ParseError.format()` renders the source line, surrounding context, a caret marker, and a suggested fix for common mistakes (missing condition in `{#if}`, unclosed tags, quoted attributes, unknown `client:*` directive, malformed `{#each}`).
+- **New `bangala create` template.** Scaffolds a real working starter with an interactive `<Counter>` island: `pages/index.bangala`, `components/Counter.bangala`, `public/islands/Counter.client.js`, styles, README, `.gitignore`. `npm install && npm run dev` produces a hydrated counter immediately.
+- **`/play` page on bangala.eu** — the bangala compiler running in your browser. Live recompile on every keystroke, three tabs (rendered HTML, generated module, islands manifest), three preset snippets.
+- **`/benchmarks` page on bangala.eu** with reproducible measurements: same blog page implemented in bangala / Next.js / Astro. Methodology in `benchmarks/SPEC.md`, measurement script in `benchmarks/measure.js`.
+- **`/vs/nextjs` honest comparison page.**
+
+### Fixed
+
+- `docs/islands/*.js` were not being served in production (Vite only copies `public/`). Moved to `public/islands/`. Affects the live demo on the homepage.
+- Parser: `<textarea>` content is now treated as raw text (joins `<script>`, `<style>`) so editor hosts can hold `{` / `<` literals without being re-parsed as bangala syntax.
+
 ## [0.4.0] - 2026-05-23
 
 ### Added

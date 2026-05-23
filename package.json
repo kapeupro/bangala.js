@@ -1,6 +1,6 @@
 {
   "name": "bangala",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "The full-stack framework that ships minimal JavaScript.",
   "license": "MIT",
