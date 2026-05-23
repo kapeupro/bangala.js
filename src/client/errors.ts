@@ -23,7 +23,8 @@ export function reportError(
 ): void {
   error.el.dataset.hydrated = "error";
   error.el.dataset.hydrationError = error.code;
-  console.error(`[bangala] hydration ${error.code}`, error.cause ?? error);
+  const details = error.cause ?? { code: error.code, entry: error.entry };
+  console.error(`[bangala] hydration ${error.code}`, details);
   if (onError) {
     try {
       onError(error);

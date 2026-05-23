@@ -11,6 +11,19 @@ const FIXTURE_ENTRY = pathToFileURL(
   join(dirname(fileURLToPath(import.meta.url)), "fixtures", "Counter-island.ts"),
 ).href;
 
+async function waitFor(assertion: () => void): Promise<void> {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    try {
+      assertion();
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+  }
+  assertion();
+}
+
 describe("islands runtime — integration", () => {
   it("hydrates a real fixture module and makes it interactive", async () => {
     const el = mountIsland(
@@ -23,9 +36,8 @@ describe("islands runtime — integration", () => {
     );
 
     hydrate(document);
-    await new Promise((r) => setTimeout(r, 20));
+    await waitFor(() => expect(el.dataset.hydrated).toBe("true"));
 
-    expect(el.dataset.hydrated).toBe("true");
     const button = el.querySelector("button")!;
     expect(button.textContent).toBe("count=10");
     button.click();
@@ -43,9 +55,8 @@ describe("islands runtime — integration", () => {
     );
 
     hydrate(document);
-    await new Promise((r) => setTimeout(r, 20));
+    await waitFor(() => expect(el.dataset.hydrationError).toBe("import-failed"));
 
-    expect(el.dataset.hydrationError).toBe("import-failed");
     expect(el.querySelector("span")?.textContent).toBe("ssr-still-here");
   });
 });
