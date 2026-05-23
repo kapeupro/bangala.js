@@ -101,3 +101,43 @@ describe("parse — components", () => {
     expect(parse("<slot/>").nodes).toEqual([{ type: "Slot" }]);
   });
 });
+
+describe("parse — blocks", () => {
+  it("parses an {#if} with an {:else} branch", () => {
+    expect(parse("{#if ok}<p>y</p>{:else}<p>n</p>{/if}").nodes).toEqual([
+      {
+        type: "IfBlock",
+        condition: "ok",
+        then: [{ type: "Element", tag: "p", attributes: [], children: [{ type: "Text", value: "y" }] }],
+        otherwise: [{ type: "Element", tag: "p", attributes: [], children: [{ type: "Text", value: "n" }] }],
+      },
+    ]);
+  });
+
+  it("parses an {#if} with no else", () => {
+    const node = parse("{#if ok}yes{/if}").nodes[0];
+    expect(node).toMatchObject({ type: "IfBlock", condition: "ok", otherwise: null });
+  });
+
+  it("parses an {#each} block", () => {
+    expect(parse("{#each items as item}<li>{item}</li>{/each}").nodes).toEqual([
+      {
+        type: "EachBlock",
+        list: "items",
+        item: "item",
+        body: [
+          {
+            type: "Element",
+            tag: "li",
+            attributes: [],
+            children: [{ type: "Expression", code: "item" }],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("errors on an unclosed {#if}", () => {
+    expect(() => parse("{#if ok}yes")).toThrow(/Unclosed \{#if\}/);
+  });
+});

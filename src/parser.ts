@@ -72,11 +72,18 @@ class Scanner {
         nodes.push(this.parseTag());
         continue;
       }
+      if (this.startsWith("{#if")) {
+        nodes.push(this.parseIf());
+        continue;
+      }
+      if (this.startsWith("{#each")) {
+        nodes.push(this.parseEach());
+        continue;
+      }
       if (this.src[this.pos] === "{") {
         nodes.push(this.parseExpression());
         continue;
       }
-      // Future tasks add: blocks.
       nodes.push(this.parseText());
     }
     return nodes;
@@ -106,6 +113,31 @@ class Scanner {
 
   private parseExpression(): TemplateNode {
     return { type: "Expression", code: this.readBraced() };
+  }
+
+  private parseIf(): TemplateNode {
+    const header = this.readBraced().trim(); // "#if condition"
+    const condition = header.slice(3).trim();
+    if (condition === "") this.error("{#if} requires a condition");
+    const then = this.parseNodes(true);
+    let otherwise: TemplateNode[] | null = null;
+    if (this.startsWith("{:else}")) {
+      this.pos += "{:else}".length;
+      otherwise = this.parseNodes(true);
+    }
+    if (!this.startsWith("{/if}")) this.error("Unclosed {#if}");
+    this.pos += "{/if}".length;
+    return { type: "IfBlock", condition, then, otherwise };
+  }
+
+  private parseEach(): TemplateNode {
+    const header = this.readBraced().trim(); // "#each list as item"
+    const match = header.match(/^#each\s+(.+?)\s+as\s+(\w+)$/);
+    if (!match) this.error("{#each} must be '{#each <list> as <item>}'");
+    const body = this.parseNodes(true);
+    if (!this.startsWith("{/each}")) this.error("Unclosed {#each}");
+    this.pos += "{/each}".length;
+    return { type: "EachBlock", list: match![1]!.trim(), item: match![2]!, body };
   }
 
   private skipWhitespace(): void {
