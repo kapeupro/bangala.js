@@ -2,6 +2,14 @@
 
 All notable changes to bangala.js are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.1] - 2026-05-23
+
+### Fixed
+
+- Correct npm package metadata to point to `kapeupro/bangala.js`.
+- Make the GitHub Actions workflow run the production build after tests.
+- Make Vitest resolve `bangala/runtime` from source so tests pass on a fresh checkout before `dist/` exists.
+
 ## [0.1.0] - 2026-05-23
 
 First public release.
