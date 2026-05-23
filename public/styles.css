@@ -313,7 +313,7 @@ footer{padding:2rem 2.5rem;border-top:1px solid var(--border);display:flex;align
 .play-editor-wrap,.play-output{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;min-height:560px}
 .play-editor-header{display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
 .play-editor-name{font-family:var(--mono);font-size:.85rem;color:var(--text3)}
-.play-presets{display:flex;gap:.4rem}
+.play-presets{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}
 .play-preset{background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:.25rem .6rem;font:inherit;font-size:.8rem;cursor:pointer;transition:all .15s}
 .play-preset:hover{color:var(--accent);border-color:var(--accent)}
 .play-editor{flex-grow:1;background:transparent;color:var(--text);border:0;padding:1rem 1.25rem;font-family:var(--mono);font-size:.85rem;line-height:1.6;resize:none;outline:none;width:100%}

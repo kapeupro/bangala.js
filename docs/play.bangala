@@ -24,6 +24,9 @@ import Layout from "./_components/Layout.bangala"
             <div class="play-presets">
               <button class="play-preset" data-preset="basic" type="button">Basique</button>
               <button class="play-preset" data-preset="conditional" type="button">&#123;#if&#125;</button>
+              <button class="play-preset" data-preset="expression" type="button">Expression</button>
+              <button class="play-preset" data-preset="escape" type="button">Auto-escape</button>
+              <button class="play-preset" data-preset="await" type="button">await</button>
               <button class="play-preset" data-preset="island" type="button">Îlot</button>
             </div>
           </div>
@@ -54,7 +57,7 @@ import Layout from "./_components/Layout.bangala"
     </bangala-island>
 
     <p class="play-foot">
-      Le compilateur est importé depuis <code>bangala</code> sur npm. Il pèse <strong>~19 ko gzip</strong> à charger. Si vous voulez l'utiliser hors playground, voir <a href="/docs/installation">l'installation</a>.
+      Le compilateur est chargé directement depuis <a href="https://esm.sh/bangala@0.5.0">esm.sh</a> — le paquet <code>bangala</code> de npm transformé en ESM utilisable dans le navigateur. Aucune compilation côté serveur, aucune requête réseau pendant que vous tapez. Pour l'utiliser dans un vrai projet, voir <a href="/docs/installation">l'installation</a>.
     </p>
   </section>
 </Layout>

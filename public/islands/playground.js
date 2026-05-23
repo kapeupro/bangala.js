@@ -1,4 +1,4 @@
-import { compile } from "bangala";
+import { compile } from "https://esm.sh/bangala@0.5.0";
 
 const DEBOUNCE_MS = 250;
 
@@ -26,13 +26,52 @@ const presets = {
     "  <p>Standard user view.</p>",
     "{/if}",
   ].join("\n"),
+  expression: [
+    "---",
+    "const price = 19.9",
+    "const qty = 3",
+    "const taxRate = 0.2",
+    "---",
+    "<h1>Receipt</h1>",
+    "<p>Unit: {price.toFixed(2)} EUR</p>",
+    "<p>Quantity: {qty}</p>",
+    "<p>Subtotal: {(price * qty).toFixed(2)} EUR</p>",
+    "<p>Tax (20%): {(price * qty * taxRate).toFixed(2)} EUR</p>",
+    "<p><strong>Total: {(price * qty * (1 + taxRate)).toFixed(2)} EUR</strong></p>",
+  ].join("\n"),
+  escape: [
+    "---",
+    "// All interpolation is auto-HTML-escaped — XSS impossible by default.",
+    'const userBio = \'<script>alert("hi")</script> hello <b>world</b>\'',
+    "---",
+    "<h1>Profile</h1>",
+    "<p>Bio:</p>",
+    "<blockquote>{userBio}</blockquote>",
+    "<p><em>The user input above is rendered as text, not HTML.</em></p>",
+  ].join("\n"),
+  await: [
+    "---",
+    "// Frontmatter runs on the server. Top-level await is allowed.",
+    "const posts = await Promise.resolve([",
+    "  { title: 'Hello world', date: '2026-05-24' },",
+    "  { title: 'Why HTML first', date: '2026-05-22' },",
+    "  { title: 'Islands explained', date: '2026-05-20' },",
+    "])",
+    "---",
+    "<h1>Latest posts</h1>",
+    "<ul>",
+    "  {#each posts as post}",
+    "    <li><strong>{post.title}</strong> — {post.date}</li>",
+    "  {/each}",
+    "</ul>",
+  ].join("\n"),
   island: [
     "---",
     'import Counter from "./Counter.bangala"',
     "const start = 10",
     "---",
     "<h1>Page with an island</h1>",
-    "<p>The counter below ships as the only JS.</p>",
+    "<p>The counter below ships as the only JS. Everything else is static HTML.</p>",
     "<Counter start={start} client:load/>",
   ].join("\n"),
 };
@@ -100,7 +139,7 @@ const island = async (Comp, props, entry, strategy) => {
       lastBlobUrl = URL.createObjectURL(blob);
       const mod = await import(/* @vite-ignore */ lastBlobUrl);
       const html = await mod.render({});
-      panes.html.srcdoc = `<!doctype html><meta charset="utf-8"><style>body{font-family:system-ui;color:#e5e5e5;background:#0a0a0a;padding:1.5rem;margin:0}a{color:#f97316}bangala-island{display:block;border:1px dashed rgba(249,115,22,.5);padding:.5rem;border-radius:6px;margin:.5rem 0}[data-placeholder]{opacity:.6;font-style:italic}</style>${html}`;
+      panes.html.srcdoc = `<!doctype html><meta charset="utf-8"><style>body{font-family:system-ui;color:#e5e5e5;background:#0a0a0a;padding:1.5rem;margin:0}a{color:#f97316}bangala-island{display:block;border:1px dashed rgba(249,115,22,.5);padding:.5rem;border-radius:6px;margin:.5rem 0}[data-placeholder]{opacity:.6;font-style:italic}blockquote{border-left:3px solid #f97316;padding-left:1rem;color:#a3a3a3;margin:1rem 0;font-style:italic}</style>${html}`;
     } catch (err) {
       showError(`Runtime: ${err.message || err}`);
     }
