@@ -30,6 +30,24 @@ describe("analyze", () => {
     expect(() => analyzeSource("<Mystery/>")).toThrow(/<Mystery> is not imported/);
   });
 
+  it("propagates client:idle into the IslandRef", () => {
+    const result = analyzeSource(
+      `---\nimport Counter from "./Counter.bangala"\n---\n<Counter client:idle/>`,
+    );
+    expect(result.islands).toEqual([
+      { componentPath: "./Counter.bangala", strategy: "client:idle" },
+    ]);
+  });
+
+  it("propagates client:visible into the IslandRef", () => {
+    const result = analyzeSource(
+      `---\nimport Counter from "./Counter.bangala"\n---\n<Counter client:visible/>`,
+    );
+    expect(result.islands).toEqual([
+      { componentPath: "./Counter.bangala", strategy: "client:visible" },
+    ]);
+  });
+
   it("errors when an island component has children", () => {
     expect(() =>
       analyzeSource(

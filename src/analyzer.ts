@@ -29,7 +29,7 @@ export function analyze(
                 `Island <${node.name}> cannot have children in v1`,
               );
             }
-            islands.push({ componentPath: path, strategy: "client:load" });
+            islands.push({ componentPath: path, strategy: node.strategy! });
           }
           walk(node.children);
           break;

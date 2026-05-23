@@ -21,6 +21,12 @@ describe("generate", () => {
     expect(gen("{name}")).toContain("${escape(name)}");
   });
 
+  it("emits void elements without closing tags", () => {
+    expect(gen(`<meta charset="UTF-8"/><link rel="stylesheet" href="/home.css"/>`)).toContain(
+      `<meta charset="UTF-8"><link rel="stylesheet" href="/home.css">`,
+    );
+  });
+
   it("emits an island() call for an island component", () => {
     const code = gen(
       `---\nimport Counter from "./Counter.bangala"\n---\n<Counter start={1} client:load/>`,

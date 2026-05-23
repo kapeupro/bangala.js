@@ -16,6 +16,11 @@ function attrsToObject(attributes: Attribute[]): string {
   return `{${entries.join(", ")}}`;
 }
 
+const VOID_ELEMENTS = new Set([
+  "area", "base", "br", "col", "embed", "hr", "img", "input",
+  "link", "meta", "param", "source", "track", "wbr",
+]);
+
 export function generate(
   template: Template,
   components: ComponentImport[],
@@ -48,6 +53,9 @@ export function generate(
         return `\${props.children ?? ""}`;
       case "Element": {
         const attrs = genElementAttrs(node.attributes);
+        if (node.children.length === 0 && VOID_ELEMENTS.has(node.tag.toLowerCase())) {
+          return `<${node.tag}${attrs}>`;
+        }
         if (node.children.length === 0) return `<${node.tag}${attrs}></${node.tag}>`;
         return `<${node.tag}${attrs}>${genNodes(node.children)}</${node.tag}>`;
       }
@@ -67,7 +75,7 @@ export function generate(
         const props = attrsToObject(node.attributes);
         if (node.island) {
           const path = byName.get(node.name)!.replace(/\.bangala$/, "");
-          return `\${await island(${node.name}, ${props}, ${JSON.stringify(path)}, "client:load")}`;
+          return `\${await island(${node.name}, ${props}, ${JSON.stringify(path)}, ${JSON.stringify(node.strategy!)})}`;
         }
         const children =
           node.children.length > 0

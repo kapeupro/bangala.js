@@ -45,6 +45,25 @@ describe("compile — island markers", () => {
       `await island(Counter, {"start": 5}, "./Counter", "client:load")`,
     );
   });
+
+  it("emits the actual strategy into the island() call for client:idle", () => {
+    const src =
+      `---\nimport Counter from "./Counter.bangala"\n---\n<Counter start={5} client:idle/>`;
+    const result = compile(src, { filename: "page.bangala" });
+    expect(result.islands).toEqual([
+      { componentPath: "./Counter.bangala", strategy: "client:idle" },
+    ]);
+    expect(result.code).toContain(
+      `await island(Counter, {"start": 5}, "./Counter", "client:idle")`,
+    );
+  });
+
+  it("emits the actual strategy into the island() call for client:visible", () => {
+    const src =
+      `---\nimport Counter from "./Counter.bangala"\n---\n<Counter client:visible/>`;
+    const result = compile(src, { filename: "page.bangala" });
+    expect(result.code).toContain(`"./Counter", "client:visible"`);
+  });
 });
 
 describe("compile — reference example", () => {
