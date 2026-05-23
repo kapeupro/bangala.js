@@ -1,6 +1,6 @@
 # bangala.js — Sous-projet 2 : runtime d'îlots côté client
 
-> Document de design. Statut : **en attente de relecture utilisateur**.
+> Document de design. Statut : **relu et amendé avant implémentation**.
 > Date : 2026-05-23.
 
 ## 1. Contexte
@@ -45,8 +45,8 @@ côté client qui scanne le DOM, charge les modules d'îlots, et les instancie.
 
 Il décrit aussi les **changements requis sur le compilateur (sous-projet 1)**
 pour qu'il puisse émettre des `data-strategy="idle"` et `data-strategy="visible"`
-(aujourd'hui le parser rejette ces directives). Ces changements sont mineurs
-(~5 lignes) et seront livrés en première tâche du plan d'implémentation.
+(aujourd'hui le parser rejette ces directives). Ces changements restent limités
+et seront livrés en première tâche du plan d'implémentation.
 
 ### 1.4. Principes directeurs
 
@@ -74,9 +74,10 @@ d'export `bangala/client` :
 ```json
 {
   "exports": {
-    ".":          "./src/index.ts",
-    "./runtime":  "./src/runtime.ts",
-    "./client":   "./src/client/index.ts"
+    ".":               "./src/index.ts",
+    "./runtime":       "./src/runtime.ts",
+    "./client":        "./src/client/index.ts",
+    "./client/auto":   "./src/client/auto.ts"
   }
 }
 ```
@@ -90,7 +91,8 @@ fonctionne en isolation et leur seul couplage est le format du marqueur
 
 ```
 src/client/
-  index.ts        ← exports publics + auto-start côté navigateur
+  index.ts        ← exports publics purs, aucun side-effect
+  auto.ts         ← importe hydrate() et auto-start côté navigateur
   scanner.ts      ← querySelectorAll + parsing des attributs data-*
   hydrator.ts     ← orchestration : strategy → import → mount
   strategies.ts   ← scheduleLoad / scheduleIdle / scheduleVisible
@@ -125,18 +127,24 @@ testable indépendamment.
 // bangala/client
 
 export interface HydrateOptions {
-  /** Appelé à chaque erreur d'hydratation. Reçoit l'élément concerné,
-   *  un code d'erreur stable, et la cause sous-jacente. */
-  onError?: (el: HTMLElement, code: ErrorCode, cause: unknown) => void;
+  /** Appelé à chaque erreur d'hydratation. */
+  onError?: (error: HydrationError) => void;
 }
 
 export type ErrorCode =
   | "missing-entry"
-  | "bad-props"
+  | "invalid-props"
   | "unknown-strategy"
   | "import-failed"
-  | "no-mount-export"
-  | "mount-threw";
+  | "missing-mount"
+  | "mount-failed";
+
+export interface HydrationError {
+  el: HTMLElement;
+  code: ErrorCode;
+  entry?: string;
+  cause?: unknown;
+}
 
 export function hydrate(
   root?: ParentNode,
@@ -146,9 +154,26 @@ export function hydrate(
 
 ### 3.2. Auto-start
 
-Quand le module `bangala/client` est chargé dans un navigateur, il s'auto-amorce :
+Le module `bangala/client` est **pur** : l'importer ne déclenche jamais
+l'hydratation. Cela garde l'API testable et permet aux applications de fournir
+des options dès le premier scan :
 
 ```ts
+import { hydrate } from "bangala/client";
+
+hydrate(document, {
+  onError: (error) => sentry.captureException(error.cause, {
+    extra: { code: error.code, entry: error.entry },
+  }),
+});
+```
+
+L'auto-start vit dans un entrypoint séparé, `bangala/client/auto`. Quand ce
+module est chargé dans un navigateur, il appelle simplement `hydrate()` :
+
+```ts
+import { hydrate } from "bangala/client";
+
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => hydrate());
@@ -158,22 +183,9 @@ if (typeof document !== "undefined") {
 }
 ```
 
-L'auto-start utilise les défauts (`root = document`, pas de `onError`
-explicite). Pour un cas d'usage avec monitoring (Sentry, etc.), le pattern
-recommandé est :
-
-```ts
-// app.ts
-import { hydrate } from "bangala/client";
-
-// (le side-effect d'auto-start a déjà tourné — voir 3.3 sur l'idempotence)
-hydrate(document, {
-  onError: (el, code, cause) => sentry.captureException(cause, { extra: { code } }),
-});
-```
-
-Le double-appel est inoffensif grâce à l'idempotence (`data-hydrated`) — voir
-section 4.3.
+Le fichier navigateur futur `/bangala-client.js` sera un build de
+`bangala/client/auto`. Le sous-projet 2 fournit l'entrypoint ; le sous-projet 4
+définira comment il est servi en dev et en production.
 
 ### 3.3. Alternative : event DOM `bangala:island-error`
 
@@ -182,16 +194,19 @@ explicitement, **chaque erreur d'hydratation dispatche aussi un événement
 custom qui bubble jusqu'à `document`** :
 
 ```ts
-window.addEventListener("bangala:island-error", (e) => {
-  const { code, cause } = (e as CustomEvent).detail;
-  sentry.captureException(cause, { extra: { code } });
+document.addEventListener("bangala:island-error", (e) => {
+  const error = (e as CustomEvent<HydrationError>).detail;
+  sentry.captureException(error.cause, {
+    extra: { code: error.code, entry: error.entry },
+  });
 });
 ```
 
 L'event est dispatché sur l'élément `<bangala-island>` concerné, avec
-`bubbles: true` et `detail: { code, cause }`. Le callback `onError` (si fourni)
-et l'event sont **tous les deux** déclenchés — un client peut combiner les
-deux mécanismes.
+`bubbles: true` et `detail` égal au même objet que celui passé à `onError`.
+Le callback `onError` (si fourni) est appelé en premier, puis l'event est
+dispatché. Un throw dans `onError` est capturé par le runtime et ne casse pas
+l'hydratation des autres îlots.
 
 ## 4. Le flux d'hydratation
 
@@ -200,11 +215,11 @@ deux mécanismes.
 ```
 1. hydrate() scanne le DOM
    ▼
-2. Pour chaque <bangala-island[data-entry]:not([data-hydrated])> :
+2. Pour chaque <bangala-island:not([data-hydrated])> :
      a. Lire data-entry, data-props, data-strategy
-     b. JSON.parse les props
+     b. Valider data-entry, puis JSON.parse(data-props ?? "{}")
      c. Marquer data-hydrated="scheduled" (verrou anti-double-hydratation)
-     d. Dispatcher selon data-strategy
+     d. Dispatcher selon data-strategy ?? "load"
    ▼
 3. Au moment opportun (immédiat / idle / visible) :
      a. dynamic-import(entry)
@@ -215,7 +230,7 @@ deux mécanismes.
 4. En cas d'échec à n'importe quelle étape :
      a. console.error avec un code d'erreur stable
      b. data-hydrated="error" + data-hydration-error="<code>"
-     c. Appel de options.onError(el, code, cause) si fourni
+     c. Appel de options.onError({ el, code, entry, cause }) si fourni
      d. Dispatch de bangala:island-error (bubbles=true)
      e. La page continue de vivre : le HTML SSR reste visible, les autres
         îlots continuent d'être hydratés indépendamment.
@@ -224,14 +239,17 @@ deux mécanismes.
 ### 4.2. Le sélecteur
 
 ```ts
-const SELECTOR = "bangala-island[data-entry]:not([data-hydrated])";
+const SELECTOR = "bangala-island:not([data-hydrated])";
 ```
 
-Trois conditions cumulées :
+Deux conditions cumulées :
 - La balise doit être `<bangala-island>` (custom element name valide, contient
   un tiret).
-- `data-entry` doit être présent (un îlot sans module ne sert à rien).
 - `data-hydrated` doit être absent (sinon = déjà traité).
+
+`data-entry` est validé après sélection. Cela permet de marquer proprement
+`data-hydration-error="missing-entry"` au lieu d'ignorer silencieusement un
+marqueur malformé.
 
 ### 4.3. Idempotence via `data-hydrated`
 
@@ -257,11 +275,11 @@ sur des messages humains.
 | Code | Quand |
 |---|---|
 | `missing-entry` | Pas d'attribut `data-entry` ou `data-entry=""`. |
-| `bad-props` | `JSON.parse(data-props)` échoue, ou `data-props` est absent. |
+| `invalid-props` | `JSON.parse(data-props)` échoue. Si `data-props` est absent, les props valent `{}`. |
 | `unknown-strategy` | `data-strategy` n'est ni `load`, ni `idle`, ni `visible`. |
 | `import-failed` | `import(data-entry)` rejette (404, syntax error, etc.). |
-| `no-mount-export` | Le module importé n'exporte pas `mount`, ou ce n'est pas une fonction. |
-| `mount-threw` | `mount(el, props, ctx)` jette une exception ou retourne une promesse rejetée. |
+| `missing-mount` | Le module importé n'exporte pas `mount`, ou ce n'est pas une fonction. |
+| `mount-failed` | `mount(el, props, ctx)` jette une exception ou retourne une promesse rejetée. |
 
 Le message humain (dans `console.error` et dans la `cause` de l'event) est
 libre et peut évoluer. Seuls les codes sont stables.
@@ -308,6 +326,11 @@ Le fallback `setTimeout(fn, 1)` couvre Safari, qui n'implémente pas
 
 ```ts
 const visible: Schedule = (el, run) => {
+  if (!("IntersectionObserver" in window)) {
+    run();
+    return;
+  }
+
   const io = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (entry.isIntersecting) {
@@ -324,11 +347,14 @@ const visible: Schedule = (el, run) => {
 Hydraté quand l'élément entre dans le viewport, avec une marge de **200px en
 avance** pour que l'îlot soit interactif juste avant que l'utilisateur ne le
 voie. L'observer se déconnecte après le premier déclenchement — un îlot ne
-s'hydrate qu'une fois.
+s'hydrate qu'une fois. Si `IntersectionObserver` n'existe pas, le fallback est
+une hydratation immédiate : mieux vaut livrer l'interactivité que laisser l'îlot
+inerte dans un navigateur ancien ou un environnement DOM incomplet.
 
 ### 5.5. Stratégie inconnue
 
-Pas de fallback à `load`. Si `data-strategy` n'est pas reconnu, l'îlot est
+Pas de fallback à `load` pour une valeur invalide. Si `data-strategy` est
+présent mais pas reconnu, l'îlot est
 marqué `data-hydrated="error"` avec `data-hydration-error="unknown-strategy"`.
 Le HTML SSR reste affiché, mais l'îlot ne devient pas interactif. Échouer
 bruyamment est mieux qu'échouer silencieusement.
@@ -338,11 +364,13 @@ bruyamment est mieux qu'échouer silencieusement.
 ### 6.1. Signature de `mount`
 
 ```ts
+type MountResult = void | (() => void | Promise<void>);
+
 export async function mount(
   el: HTMLElement,
   props: Record<string, unknown>,
   ctx: MountContext,
-): Promise<void>;
+): MountResult | Promise<MountResult>;
 
 interface MountContext {
   strategy: "load" | "idle" | "visible";
@@ -353,7 +381,7 @@ interface MountContext {
 | Paramètre | Garanties |
 |---|---|
 | `el` | L'élément `<bangala-island>` complet, **avec le SSR HTML toujours dedans**. `mount` peut le lire, préserver son contenu, le remplacer, ou l'augmenter. |
-| `props` | Déjà parsé depuis `JSON.parse(el.dataset.props ?? "{}")` par le runtime. Erreurs de parsing → `bad-props` (l'îlot n'est pas appelé). |
+| `props` | Déjà parsé depuis `JSON.parse(el.dataset.props ?? "{}")` par le runtime. Erreurs de parsing → `invalid-props` (l'îlot n'est pas appelé). |
 | `ctx.strategy` | Identifie ce qui a déclenché l'hydratation. Utile pour de la télémétrie ou des comportements conditionnels. |
 | `ctx.entry` | La valeur brute de `data-entry`. Utile pour des îlots qui veulent connaître leur propre identité. |
 
@@ -431,7 +459,7 @@ conventions de build n'entre dans `bangala/client`.
 ## 8. Changements requis sur le compilateur (sous-projet 1)
 
 Pour que `data-strategy="idle"` et `data-strategy="visible"` puissent être
-émis, trois petits changements sont requis dans le sous-projet 1. Ils sont
+émis, quatre petits changements sont requis dans le sous-projet 1. Ils sont
 décrits comme **première tâche** du plan d'implémentation, avant tout code
 client.
 
@@ -454,23 +482,43 @@ if (directive && !VALID_DIRECTIVES.has(directive.name)) {
 }
 ```
 
+Et l'AST doit conserver la directive réelle :
+
+```ts
+strategy: directive ? (directive.name as ClientDirective) : null,
+```
+
 ### 8.2. `src/types.ts`
 
 ```ts
-type ClientStrategy = "client:load" | "client:idle" | "client:visible";
+type ClientDirective = "client:load" | "client:idle" | "client:visible";
 
 interface ComponentNode {
   // …
-  strategy: ClientStrategy | null;
+  strategy: ClientDirective | null;
 }
 
 interface IslandRef {
   componentPath: string;
-  strategy: ClientStrategy;
+  strategy: ClientDirective;
 }
 ```
 
-### 8.3. `src/generator.ts`
+### 8.3. `src/analyzer.ts`
+
+Aujourd'hui :
+
+```ts
+islands.push({ componentPath: path, strategy: "client:load" });
+```
+
+À corriger pour propager la stratégie réelle :
+
+```ts
+islands.push({ componentPath: path, strategy: node.strategy! });
+```
+
+### 8.4. `src/generator.ts`
 
 Aujourd'hui :
 
@@ -484,8 +532,10 @@ return `\${await island(${node.name}, ${props}, ${JSON.stringify(path)}, "client
 return `\${await island(${node.name}, ${props}, ${JSON.stringify(path)}, ${JSON.stringify(node.strategy!)})}`;
 ```
 
-Les tests du parser et du generator sont à étendre pour couvrir `client:idle`
-et `client:visible`. Aucun changement de surface API publique du compilateur.
+Les tests du parser, de l'analyzer, du generator et du helper `island()` sont à
+étendre pour couvrir `client:idle` et `client:visible`. Aucun changement de
+surface API publique du compilateur, à part l'élargissement du type
+`IslandRef.strategy`.
 
 ## 9. Stratégie de tests
 
@@ -509,6 +559,8 @@ Tests TDD, identiques à la discipline du sous-projet 1.
 - **Dynamic-import dans Vitest** : Vitest gère nativement `import()` dans
   happy-dom. Les fixtures sont des fichiers `.ts` réels — pas de mock,
   réutilisation du pattern `compileAndRender` du sous-projet 1.
+- **Dépendance DOM** : ajouter `happy-dom` en devDependency et configurer
+  Vitest pour n'activer cet environnement que sur les tests client.
 
 ### 9.3. Couverture cible
 
@@ -524,9 +576,10 @@ Tests TDD, identiques à la discipline du sous-projet 1.
 
 | Feature | Détail |
 |---|---|
-| API `hydrate(root?, options?)` | Exportée + auto-start dans le navigateur. |
+| API `hydrate(root?, options?)` | Exportée depuis `bangala/client`, sans side-effect. |
+| Auto-start | Entry point séparé `bangala/client/auto`, futur build `/bangala-client.js`. |
 | `data-hydrated` à trois valeurs | `"scheduled"` → `"true"` ou `"error"`. |
-| Stratégies `load`, `idle`, `visible` | Avec fallback Safari pour `idle`. |
+| Stratégies `load`, `idle`, `visible` | Avec fallback Safari pour `idle` et fallback immédiat sans `IntersectionObserver`. |
 | Contrat `mount(el, props, ctx)` | `ctx = { strategy, entry }`. |
 | Gestion d'erreurs | `console.error` + `data-hydration-error` + callback `onError` + event `bangala:island-error`. |
 | Idempotence | Garantie par `data-hydrated`. |
@@ -549,7 +602,8 @@ Tests TDD, identiques à la discipline du sous-projet 1.
 
 Le sous-projet 2 est terminé quand :
 
-1. Le sous-chemin `bangala/client` est exporté et importable.
+1. Les sous-chemins `bangala/client` et `bangala/client/auto` sont exportés et
+   importables.
 2. L'extension compilateur (section 8) est livrée, et le parser accepte
    `client:load`, `client:idle`, `client:visible`.
 3. Une page contenant des `<bangala-island>` avec les trois stratégies voit
