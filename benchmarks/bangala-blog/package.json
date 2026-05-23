@@ -1,0 +1,14 @@
+{
+  "name": "bangala-blog-bench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bangala build --pages pages --out-dir _site"
+  },
+  "dependencies": {
+    "bangala": "file:../.."
+  },
+  "devDependencies": {
+    "vite": "^7.3.3"
+  }
+}

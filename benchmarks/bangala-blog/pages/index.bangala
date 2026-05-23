@@ -1,0 +1,29 @@
+---
+import Newsletter from "../components/Newsletter.bangala"
+import posts from "../../posts.json"
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Bench blog (bangala.js)</title>
+<link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+<main>
+  <h1>The blog</h1>
+  <ul class="posts">
+    {#each posts as post}
+      <li class="card">
+        <h2>{post.title}</h2>
+        <time datetime={post.date}>{post.date}</time>
+        <p>{post.excerpt}</p>
+      </li>
+    {/each}
+  </ul>
+
+  <Newsletter client:load />
+</main>
+</body>
+</html>

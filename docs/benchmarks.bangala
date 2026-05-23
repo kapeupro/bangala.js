@@ -1,0 +1,99 @@
+---
+import Layout from "./_components/Layout.bangala"
+import { readFileSync } from "node:fs"
+
+const results = JSON.parse(readFileSync("benchmarks/results.json", "utf8"))
+
+function formatBytes(n) {
+  if (typeof n !== "number") return "-"
+  if (n === 0) return "0 B"
+  if (n < 1024) return n + " B"
+  const kb = n / 1024
+  if (kb < 100) return kb.toFixed(1) + " kB"
+  return Math.round(kb) + " kB"
+}
+
+const rows = results.frameworks.map((fw) => ({
+  name: fw.name,
+  version: fw.version || "?",
+  buildOk: fw.buildOk,
+  isBangala: fw.name === "bangala.js",
+  jsRaw: formatBytes(fw.jsRawBytes),
+  jsGzip: formatBytes(fw.jsGzipBytes),
+  htmlRaw: formatBytes(fw.htmlRawBytes),
+  htmlGzip: formatBytes(fw.htmlGzipBytes),
+  jsFileCount: fw.jsFileCount,
+  error: fw.error || null,
+}))
+
+const generatedAt = results.generatedAt
+---
+<Layout title="Benchmarks publics | bangala.js" description="Mesures publiques et reproductibles : bundle JavaScript et taille HTML pour une même page de blog implémentée en bangala.js, Next.js et Astro." path="/benchmarks">
+  <section class="bench-hero">
+    <p class="section-label reveal">Mesures publiques</p>
+    <h1 class="section-title reveal">La même page.<br/><span class="gradient-text">Trois frameworks.</span></h1>
+    <p class="section-sub reveal">Une page de blog statique de 50 cartes et un formulaire d'inscription interactif, construite trois fois&nbsp;: en bangala.js, en Next.js (App Router) et en Astro. On mesure les octets que le navigateur télécharge, rien d'autre.</p>
+    <p class="bench-meta reveal">Dernière mesure&nbsp;: {generatedAt}</p>
+  </section>
+
+  <section class="section">
+    <div class="bench-wrap">
+      <table class="bench-table">
+        <thead>
+          <tr>
+            <th>Framework</th>
+            <th>Version</th>
+            <th>JS (brut)</th>
+            <th>JS (gzip)</th>
+            <th>HTML (brut)</th>
+            <th>HTML (gzip)</th>
+            <th>Fichiers JS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each rows as row}
+            <tr class={row.isBangala ? "row-bangala" : ""}>
+              <td>{row.name}</td>
+              <td>{row.version}</td>
+              {#if row.buildOk}
+                <td>{row.jsRaw}</td>
+                <td>{row.jsGzip}</td>
+                <td>{row.htmlRaw}</td>
+                <td>{row.htmlGzip}</td>
+                <td>{row.jsFileCount}</td>
+              {/if}
+              {#if !row.buildOk}
+                <td colspan="5" class="bench-error">build absent&nbsp;: {row.error}</td>
+              {/if}
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="bench-meta">JS&nbsp;: somme des fichiers <code class="inline-code">.js</code> que la page charge au premier rendu. HTML&nbsp;: taille du <code class="inline-code">index.html</code> servi pour <code class="inline-code">/</code>. Les valeurs gzip utilisent le niveau de compression par défaut de Node.</p>
+  </section>
+
+  <section class="section">
+    <p class="section-label">Comment on mesure</p>
+    <h2 class="section-title">Pas de magie. Que des octets.</h2>
+    <p class="section-sub">Les trois projets implémentent exactement la même page&nbsp;: 50 cartes rendues côté serveur, plus un formulaire newsletter qui devient interactif côté client. Le code est dans <a href="https://github.com/kapeupro/bangala.js/tree/main/benchmarks">benchmarks/</a>.</p>
+
+    <ul class="bench-list">
+      <li>La spec partagée est dans <a href="https://github.com/kapeupro/bangala.js/blob/main/benchmarks/SPEC.md">benchmarks/SPEC.md</a>.</li>
+      <li>Le script de mesure (zéro dépendance npm, juste <code class="inline-code">node:fs</code> et <code class="inline-code">node:zlib</code>) est dans <a href="https://github.com/kapeupro/bangala.js/blob/main/benchmarks/measure.js">benchmarks/measure.js</a>.</li>
+      <li>Les données — 50 articles factices — sont partagées via <code class="inline-code">benchmarks/posts.json</code>.</li>
+      <li>Le formulaire newsletter est la <strong>seule chose interactive</strong> de la page. C'est le point&nbsp;: en bangala et Astro, lui seul nécessite du JavaScript. En Next.js, sa présence force l'envoi du runtime React complet, même pour les cartes serveur.</li>
+    </ul>
+
+    <p class="section-label" style="margin-top: 3rem;">Ce qu'on ne mesure pas</p>
+    <h2 class="section-title">Et pourquoi.</h2>
+    <ul class="bench-list">
+      <li><strong>Pas de Lighthouse.</strong> Lighthouse exige Chrome headless et reste bruyant en CI. La taille du bundle et du HTML est déterministe et corrélée au TTI pour ce type de page.</li>
+      <li><strong>Pas de CPU runtime.</strong> Hors scope v1, et difficile à reproduire fidèlement.</li>
+      <li><strong>Pas de navigation SPA.</strong> Cette page est statique. Les frameworks SPA brillent ailleurs — c'est une vraie différence, pas un défaut.</li>
+    </ul>
+
+    <p class="bench-meta">Les chiffres ci-dessus seront re-mesurés à chaque release. Si Next.js ou Astro publient une optimisation qui change la donne, le tableau changera.</p>
+  </section>
+</Layout>

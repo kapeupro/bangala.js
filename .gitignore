@@ -25,3 +25,10 @@ npm-debug.log*
 .DS_Store
 .idea/
 *.swp
+
+# Benchmark scaffolds (kept slim in git)
+benchmarks/*/node_modules/
+benchmarks/*/.next/
+benchmarks/*/dist/
+benchmarks/*/_site/
+benchmarks/*/.astro/

@@ -1,0 +1,24 @@
+---
+// SSR markup for the newsletter form. The interactive behaviour is
+// added by the inline <script> below (Astro processes and bundles it).
+---
+<form class="newsletter">
+  <label for="nl-email">Sign up for the newsletter</label>
+  <input id="nl-email" type="email" placeholder="you@example.com" required />
+  <button type="submit">Subscribe</button>
+  <p class="nl-msg" aria-live="polite"></p>
+</form>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>("form.newsletter");
+  if (form) {
+    const input = form.querySelector<HTMLInputElement>("input");
+    const btn = form.querySelector<HTMLButtonElement>("button");
+    const msg = form.querySelector<HTMLParagraphElement>(".nl-msg");
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (btn) btn.disabled = true;
+      if (msg && input) msg.textContent = `Thanks, ${input.value}!`;
+    });
+  }
+</script>

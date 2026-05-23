@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-05-23T21:26:45.433Z",
+  "frameworks": [
+    {
+      "name": "bangala.js",
+      "version": "0.4.0",
+      "buildOk": true,
+      "jsRawBytes": 2080,
+      "jsGzipBytes": 987,
+      "htmlRawBytes": 17539,
+      "htmlGzipBytes": 1198,
+      "jsFileCount": 1
+    },
+    {
+      "name": "Next.js",
+      "version": "14.2.18",
+      "buildOk": true,
+      "jsRawBytes": 413835,
+      "jsGzipBytes": 127426,
+      "htmlRawBytes": 39800,
+      "htmlGzipBytes": 3206,
+      "jsFileCount": 7
+    },
+    {
+      "name": "Astro",
+      "version": "4.16.19",
+      "buildOk": true,
+      "jsRawBytes": 0,
+      "jsGzipBytes": 0,
+      "htmlRawBytes": 15483,
+      "htmlGzipBytes": 1185,
+      "jsFileCount": 0
+    }
+  ]
+}

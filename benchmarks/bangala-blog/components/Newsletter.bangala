@@ -1,0 +1,10 @@
+---
+// SSR markup for the newsletter form. The interactive behaviour lives
+// in /islands/newsletter.js and the bangala client runtime mounts it.
+---
+<form class="newsletter">
+  <label for="nl-email">Sign up for the newsletter</label>
+  <input id="nl-email" type="email" placeholder="you@example.com" required/>
+  <button type="submit">Subscribe</button>
+  <p class="nl-msg" aria-live="polite"></p>
+</form>

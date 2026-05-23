@@ -12,7 +12,7 @@ const VOID_ELEMENTS = new Set([
   "link", "meta", "param", "source", "track", "wbr",
 ]);
 
-const RAW_TEXT_ELEMENTS = new Set(["script", "style"]);
+const RAW_TEXT_ELEMENTS = new Set(["script", "style", "textarea"]);
 
 export function parse(source: string, _filename = "<unknown>"): Template {
   const fm = source.match(/^\s*---\r?\n([\s\S]*?)\r?\n---\r?\n?/);

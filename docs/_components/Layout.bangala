@@ -3,6 +3,8 @@ import SeoHead from "./SeoHead.bangala"
 
 const navLinks = [
   { label: "Docs", href: "/docs" },
+  { label: "Playground", href: "/play" },
+  { label: "Benchmarks", href: "/benchmarks" },
   { label: "Comparatif", href: "/vs/nextjs" },
   { label: "npm", href: "https://www.npmjs.com/package/bangala" },
   { label: "GitHub", href: "https://github.com/kapeupro/bangala.js" },
@@ -12,6 +14,7 @@ const footerLinks = [
   { label: "GitHub", href: "https://github.com/kapeupro/bangala.js" },
   { label: "npm", href: "https://www.npmjs.com/package/bangala" },
   { label: "Docs", href: "/docs" },
+  { label: "Benchmarks", href: "/benchmarks" },
   { label: "Comparatif", href: "/vs/nextjs" },
   { label: "Issues", href: "https://github.com/kapeupro/bangala.js/issues" },
 ]

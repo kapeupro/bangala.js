@@ -1,0 +1,60 @@
+---
+import Layout from "./_components/Layout.bangala"
+---
+<Layout
+  title="Playground | bangala.js"
+  description="Le compilateur bangala tourne dans votre navigateur. Modifiez le code à gauche, regardez le HTML, le module compilé et la liste des îlots se mettre à jour à droite."
+  path="/play"
+>
+  <section class="play-hero">
+    <p class="section-label">Playground</p>
+    <h1>Compilez bangala<br/><span class="gradient-text">dans votre onglet.</span></h1>
+    <p class="section-sub">Le compilateur de bangala est un module ESM pur sans dépendance Node. Cette page le charge tel-quel depuis npm et compile votre code à chaque frappe. Aucun serveur, aucune requête.</p>
+  </section>
+
+  <section class="play-section">
+    <bangala-island
+      data-entry="/islands/playground.js"
+      data-strategy="load"
+    >
+      <div class="play-grid">
+        <div class="play-editor-wrap">
+          <div class="play-editor-header">
+            <span class="play-editor-name">playground.bangala</span>
+            <div class="play-presets">
+              <button class="play-preset" data-preset="basic" type="button">Basique</button>
+              <button class="play-preset" data-preset="conditional" type="button">&#123;#if&#125;</button>
+              <button class="play-preset" data-preset="island" type="button">Îlot</button>
+            </div>
+          </div>
+          <textarea
+            class="play-editor"
+            spellcheck="false"
+            aria-label="Source bangala"
+          ></textarea>
+        </div>
+
+        <div class="play-output">
+          <div class="play-tabs" role="tablist">
+            <button class="play-tab is-active" data-pane="html" role="tab" type="button">HTML rendu</button>
+            <button class="play-tab" data-pane="module" role="tab" type="button">Module ESM</button>
+            <button class="play-tab" data-pane="islands" role="tab" type="button">Îlots</button>
+          </div>
+          <div class="play-error" data-error hidden role="alert"></div>
+          <iframe
+            class="play-pane is-active play-iframe"
+            data-pane-content="html"
+            title="HTML rendu"
+            sandbox="allow-same-origin"
+          ></iframe>
+          <pre class="play-pane play-code" data-pane-content="module"><code>// Le module compilé apparaîtra ici…</code></pre>
+          <pre class="play-pane play-code" data-pane-content="islands"><code>[]</code></pre>
+        </div>
+      </div>
+    </bangala-island>
+
+    <p class="play-foot">
+      Le compilateur est importé depuis <code>bangala</code> sur npm. Il pèse <strong>~19 ko gzip</strong> à charger. Si vous voulez l'utiliser hors playground, voir <a href="/docs/installation">l'installation</a>.
+    </p>
+  </section>
+</Layout>

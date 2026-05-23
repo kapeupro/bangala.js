@@ -97,6 +97,17 @@ describe("parse — elements", () => {
     ]);
   });
 
+  it("preserves raw textarea contents (no nested parsing)", () => {
+    expect(parse("<textarea><h1>{user}</h1>\n{#if a}b{/if}</textarea>").nodes).toEqual([
+      {
+        type: "Element",
+        tag: "textarea",
+        attributes: [],
+        children: [{ type: "Text", value: "<h1>{user}</h1>\n{#if a}b{/if}" }],
+      },
+    ]);
+  });
+
   it("errors on an unclosed element", () => {
     expect(() => parse("<div>")).toThrow(/Unclosed <div>/);
   });
