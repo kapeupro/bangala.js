@@ -62,10 +62,40 @@ class Scanner {
         if (!nested) this.error("Unexpected closing token");
         break;
       }
-      // Future tasks add: comments, tags, expressions, blocks.
+      if (this.src[this.pos] === "{") {
+        nodes.push(this.parseExpression());
+        continue;
+      }
+      // Future tasks add: comments, tags, blocks.
       nodes.push(this.parseText());
     }
     return nodes;
+  }
+
+  /** Reads from `{` to its matching `}`, returns the inner source. */
+  private readBraced(): string {
+    if (this.src[this.pos] !== "{") this.error("Expected '{'");
+    this.pos++;
+    let depth = 1;
+    let code = "";
+    while (!this.eof()) {
+      const ch = this.src[this.pos]!;
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          this.pos++;
+          return code;
+        }
+      }
+      code += ch;
+      this.pos++;
+    }
+    this.error("Unclosed '{'");
+  }
+
+  private parseExpression(): TemplateNode {
+    return { type: "Expression", code: this.readBraced() };
   }
 
   private parseText(): TemplateNode {
