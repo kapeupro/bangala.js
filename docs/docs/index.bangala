@@ -1,0 +1,129 @@
+---
+import Layout from "../components/Layout.bangala"
+---
+<Layout title="Documentation | bangala.js">
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <h3>Getting Started</h3>
+      <ul>
+        <li><a href="/docs" class="active">Introduction</a></li>
+        <li><a href="/docs/installation">Installation</a></li>
+      </ul>
+      <h3>Core Concepts</h3>
+      <ul>
+        <li><a href="/docs/islands">Islands Architecture</a></li>
+        <li><a href="/docs/routing">File-based Routing</a></li>
+        <li><a href="/docs/syntax">.bangala Syntax</a></li>
+      </ul>
+      <h3>Deployment</h3>
+      <ul>
+        <li><a href="/docs/adapters">Adapters</a></li>
+      </ul>
+    </aside>
+    <div class="docs-content">
+      <p class="section-label">Documentation</p>
+      <h1>Introduction</h1>
+      <p class="section-sub">Welcome to the official bangala.js documentation. bangala.js is an HTML-first framework that prioritizes shipping zero JavaScript by default.</p>
+
+      <h2>What is bangala.js?</h2>
+      <p>bangala.js is a compiler and Vite-powered framework that converts `.bangala` files directly into ESM modules. It follows the <strong>Islands Architecture</strong> pattern, which means components are rendered to static HTML on the server, and JavaScript is only loaded and hydrated on the client if you explicitly opt-in using directives like <code>client:load</code>.</p>
+
+      <h2>Key Principles</h2>
+      <ul class="compare-list" style="margin-top: 1rem;">
+        <li><span class="check">✓</span> <strong>Zero JS by default</strong>: Static content requires no hydration.</li>
+        <li><span class="check">✓</span> <strong>Explicit interactivity</strong>: You decide exactly which parts of your page need JS.</li>
+        <li><span class="check">✓</span> <strong>HTML-first syntax</strong>: No JSX overhead. Just plain HTML with simple frontmatter logic.</li>
+        <li><span class="check">✓</span> <strong>Vite-powered</strong>: Blazing fast dev server and built-in optimization.</li>
+      </ul>
+
+      <div class="cta-actions" style="margin-top: 3rem; justify-content: flex-start;">
+        <a href="/docs/installation" class="btn-primary">Next: Installation</a>
+      </div>
+    </div>
+  </div>
+</Layout>
+<style>
+.docs-layout {
+  display: flex;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+  gap: 4rem;
+  align-items: flex-start;
+}
+.docs-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 100px;
+}
+.docs-sidebar h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text3);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.docs-sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.docs-sidebar li {
+  margin-bottom: 0.5rem;
+}
+.docs-sidebar a {
+  color: var(--text2);
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: color 0.2s;
+}
+.docs-sidebar a:hover, .docs-sidebar a.active {
+  color: var(--accent);
+}
+.docs-content {
+  flex-grow: 1;
+  max-width: 760px;
+}
+.docs-content h1 {
+  font-size: 3rem;
+  margin-bottom: 1.5rem;
+  letter-spacing: -1px;
+}
+.docs-content h2 {
+  font-size: 1.8rem;
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+  letter-spacing: -0.5px;
+}
+.docs-content p {
+  color: var(--text2);
+  font-size: 1.1rem;
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+}
+.docs-content strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.docs-content code {
+  background: var(--bg2);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.9em;
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+@media (max-width: 768px) {
+  .docs-layout {
+    flex-direction: column;
+    gap: 2rem;
+  }
+  .docs-sidebar {
+    width: 100%;
+    position: static;
+  }
+}
+</style>

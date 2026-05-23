@@ -1,0 +1,89 @@
+---
+import Layout from "../components/Layout.bangala"
+---
+<Layout title="Installation | bangala.js">
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <h3>Getting Started</h3>
+      <ul>
+        <li><a href="/docs">Introduction</a></li>
+        <li><a href="/docs/installation" class="active">Installation</a></li>
+      </ul>
+      <h3>Core Concepts</h3>
+      <ul>
+        <li><a href="/docs/islands">Islands Architecture</a></li>
+        <li><a href="/docs/routing">File-based Routing</a></li>
+        <li><a href="/docs/syntax">.bangala Syntax</a></li>
+      </ul>
+      <h3>Deployment</h3>
+      <ul>
+        <li><a href="/docs/adapters">Adapters</a></li>
+      </ul>
+    </aside>
+    <div class="docs-content">
+      <p class="section-label">Documentation</p>
+      <h1>Installation</h1>
+      <p class="section-sub">Get up and running with bangala.js in seconds using our official CLI tool.</p>
+
+      <h2>Quickstart</h2>
+      <p>The easiest way to start a new bangala.js project is by using the `create` command. It will scaffold a fresh project for you.</p>
+
+      <div class="hero-code" style="margin-top: 2rem;">
+        <div class="code-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-fname">Terminal</span>
+        </div>
+        <div class="code-body">
+<span class="ln">1</span><span class="cmt"># Create a new project</span>
+<span class="ln">2</span><span class="kw">npx</span> <span class="fn">bangala</span> create <span class="str">my-app</span>
+<span class="ln">3</span>
+<span class="ln">4</span><span class="cmt"># Go into the directory and install dependencies</span>
+<span class="ln">5</span><span class="kw">cd</span> <span class="str">my-app</span>
+<span class="ln">6</span><span class="kw">npm</span> <span class="fn">install</span>
+<span class="ln">7</span>
+<span class="ln">8</span><span class="cmt"># Start the development server</span>
+<span class="ln">9</span><span class="kw">npm</span> <span class="fn">run</span> dev
+        </div>
+      </div>
+
+      <h2>Manual Installation</h2>
+      <p>If you prefer to set up bangala.js manually in an existing project, you can install the core package from npm:</p>
+      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
+        <div class="code-body">
+<span class="ln">1</span><span class="kw">npm</span> <span class="fn">install</span> <span class="str">bangala</span>
+        </div>
+      </div>
+
+      <p>Then, create your first page in the <code>pages/</code> directory:</p>
+      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
+        <div class="code-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-fname">pages/index.bangala</span>
+        </div>
+        <div class="code-body">
+<span class="ln">1</span><span class="ctag">&lt;h1&gt;</span>Hello World!<span class="ctag">&lt;/h1&gt;</span>
+<span class="ln">2</span><span class="ctag">&lt;p&gt;</span>Welcome to bangala.js<span class="ctag">&lt;/p&gt;</span>
+        </div>
+      </div>
+
+      <div class="cta-actions" style="margin-top: 3rem; justify-content: flex-start;">
+        <a href="/docs/islands" class="btn-primary">Next: Islands Architecture</a>
+      </div>
+    </div>
+  </div>
+</Layout>
+<style>
+.docs-layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 4rem 2rem; gap: 4rem; align-items: flex-start; }
+.docs-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 100px; }
+.docs-sidebar h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+.docs-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.docs-sidebar li { margin-bottom: 0.5rem; }
+.docs-sidebar a { color: var(--text2); text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+.docs-sidebar a:hover, .docs-sidebar a.active { color: var(--accent); }
+.docs-content { flex-grow: 1; max-width: 760px; }
+.docs-content h1 { font-size: 3rem; margin-bottom: 1.5rem; letter-spacing: -1px; }
+.docs-content h2 { font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; letter-spacing: -0.5px; }
+.docs-content p { color: var(--text2); font-size: 1.1rem; line-height: 1.7; margin-bottom: 1.5rem; }
+.docs-content code { background: var(--bg2); padding: 0.2em 0.4em; border-radius: 4px; font-family: var(--mono); font-size: 0.9em; color: var(--accent); border: 1px solid var(--border); }
+@media (max-width: 768px) { .docs-layout { flex-direction: column; gap: 2rem; } .docs-sidebar { width: 100%; position: static; } }
+</style>
