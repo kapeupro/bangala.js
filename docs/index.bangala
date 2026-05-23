@@ -434,9 +434,9 @@ footer{padding:2rem 2.5rem;border-top:1px solid var(--border);display:flex;align
     <div class="cta-glow"></div>
     <p class="section-label reveal">Démarrer</p>
     <h2 class="reveal">Prêt à construire<br/><span class="gradient-text">léger&nbsp;?</span></h2>
-    <p class="reveal">Une commande. Le compilateur, le runtime d'îlots et le routeur <code class="inline-code">v0.2.0</code> dans votre projet.</p>
+    <p class="reveal">Une commande. Le compilateur, le runtime d'îlots, le routeur et les helpers Vite <code class="inline-code">v0.3.0</code>.</p>
     <div class="cta-actions reveal">
-      <a href="https://www.npmjs.com/package/bangala" class="btn-primary">Installer v0.2.0</a>
+      <a href="https://www.npmjs.com/package/bangala" class="btn-primary">Installer v0.3.0</a>
       <a href="#docs" class="btn-secondary">Lire la doc</a>
     </div>
     <div class="install-command reveal">npm install bangala</div>
@@ -444,7 +444,7 @@ footer{padding:2rem 2.5rem;border-top:1px solid var(--border);display:flex;align
 </main>
 
 <footer>
-  <div class="footer-left">bangala.js - MIT License - v0.2.0</div>
+  <div class="footer-left">bangala.js - MIT License - v0.3.0</div>
   <div class="footer-links">
     {#each footerLinks as link}
       <a href={link.href}>{link.label}</a>

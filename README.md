@@ -7,7 +7,7 @@
 ### The full-stack framework that ships minimal JavaScript.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![npm](https://img.shields.io/badge/npm-v0.2.0-blue.svg)](https://www.npmjs.com/package/bangala)
+[![npm](https://img.shields.io/badge/npm-v0.3.0-blue.svg)](https://www.npmjs.com/package/bangala)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 </div>
@@ -34,10 +34,10 @@ only travels to the client where you explicitly ask for it.
 
 ## Status
 
-v0.2.0 ships **sub-project 1** (the `.bangala` compiler and server runtime),
-**sub-project 2** (the client islands runtime), and **sub-project 3**
-(file-based routing). The dev server + build pipeline and the CLI are the next
-two sub-projects on the roadmap. Design specs live under
+v0.3.0 ships **sub-project 1** (the `.bangala` compiler and server runtime),
+**sub-project 2** (the client islands runtime), **sub-project 3**
+(file-based routing), and **sub-project 4** (Vite dev server + build helpers).
+The CLI is the next sub-project on the roadmap. Design specs live under
 [`docs/superpowers/specs/`](./docs/superpowers/specs).
 
 ## Install
@@ -111,8 +111,8 @@ const match = matchRoute(routes, "/blog/hello-world");
 ```
 
 **5. Wire the client runtime in the page HTML.** The runtime is published as
-`bangala/client/auto`. In v0.2.0 the bundling of that entry to a browser
-script is your responsibility (sub-project 4 will automate it):
+`bangala/client/auto`. The Vite build helper bundles it automatically; if you
+are wiring your own bundler, include it as a module script:
 
 ```html
 <script type="module" src="/bangala-client.js"></script>
@@ -125,6 +125,22 @@ import { hydrate } from "bangala/client";
 
 hydrate(document, {
   onError: (error) => reportToMonitoring(error),
+});
+```
+
+**6. Use the Vite helpers.** `bangala/vite` ships the plugin and programmable
+dev/build helpers used by the future CLI:
+
+```ts
+import { createBangalaDevServer, buildBangala } from "bangala/vite";
+
+const dev = await createBangalaDevServer({ root: process.cwd() });
+await dev.listen(5173);
+
+await buildBangala({
+  root: process.cwd(),
+  outDir: "dist",
+  prerender: ["/blog/hello-world"], // dynamic routes opt in explicitly
 });
 ```
 
@@ -180,6 +196,45 @@ Supported file conventions:
 
 `matchRoute(routes, pathname)` returns `{ route, pathname, params }` or `null`.
 Dynamic params are strings; catch-all params are string arrays.
+
+### `bangala()` Vite plugin
+
+The Vite plugin compiles `.bangala` files on demand, resolves component imports,
+and installs a route middleware when `pages` is enabled.
+
+```ts
+import { defineConfig } from "vite";
+import { bangala } from "bangala/vite";
+
+export default defineConfig({
+  plugins: [bangala({ pages: "pages" })],
+});
+```
+
+### `createBangalaDevServer(options?)`
+
+Creates a Vite dev server configured for Bangala routes. It does not call
+`listen()` for you, so CLIs and custom servers can decide the host/port.
+
+```ts
+const server = await createBangalaDevServer({ root: process.cwd() });
+await server.listen(5173);
+```
+
+### `buildBangala(options?)`
+
+Bundles `bangala/client/auto` and prerenders HTML files into `outDir`.
+Static routes are prerendered by default. Dynamic routes must be passed through
+`prerender`.
+
+```ts
+await buildBangala({
+  root: process.cwd(),
+  pages: "pages",
+  outDir: "dist",
+  prerender: ["/blog/first-post"],
+});
+```
 
 ### `hydrate(root?, options?)`
 
@@ -255,14 +310,14 @@ alongside them are free to evolve.
 ## Roadmap
 
 bangala.js is structured as five sub-projects, each with its own spec/plan
-cycle. v0.2.0 delivers the first three; the remaining two are queued:
+cycle. v0.3.0 delivers the first four; the CLI remains queued:
 
 | # | Sub-project | Status |
 |---|---|---|
 | 1 | `.bangala` compiler + server runtime | Shipped in v0.1.0 |
 | 2 | Client islands runtime | Shipped in v0.1.0 |
 | 3 | File-based routing | Shipped in v0.2.0 |
-| 4 | Dev server + build (Vite) | Planned |
+| 4 | Dev server + build (Vite) | Shipped in v0.3.0 |
 | 5 | CLI + scaffolding + deploy adapters | Planned |
 
 Designs live in [`docs/superpowers/specs/`](./docs/superpowers/specs).

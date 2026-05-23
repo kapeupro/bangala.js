@@ -2,6 +2,14 @@
 
 All notable changes to bangala.js are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-05-23
+
+### Added
+
+- `bangala/vite` public export with the `bangala()` Vite plugin.
+- `createBangalaDevServer()` programmable dev server using Vite middleware and the file-route manifest.
+- `buildBangala()` production build helper that bundles the client runtime and prerenders static routes plus explicit dynamic paths.
+
 ## [0.2.0] - 2026-05-23
 
 ### Added
