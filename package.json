@@ -1,6 +1,6 @@
 {
   "name": "bangala",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "The full-stack framework that ships minimal JavaScript.",
   "license": "MIT",
@@ -36,6 +36,10 @@
     "./runtime": {
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"
+    },
+    "./router": {
+      "types": "./dist/router.d.ts",
+      "import": "./dist/router.js"
     },
     "./client": {
       "types": "./dist/client/index.d.ts",

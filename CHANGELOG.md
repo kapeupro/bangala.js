@@ -2,6 +2,14 @@
 
 All notable changes to bangala.js are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-05-23
+
+### Added
+
+- `bangala/router` public export with `discoverRoutes`, `createRoutes`, `routePathFromFile`, and `matchRoute`.
+- File-based route conventions for `index.bangala`, static routes, `[param]`, and `[...catchAll]`.
+- Deterministic route specificity sorting and duplicate route detection.
+
 ## [0.1.1] - 2026-05-23
 
 ### Fixed

@@ -7,7 +7,7 @@
 ### The full-stack framework that ships minimal JavaScript.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![npm](https://img.shields.io/badge/npm-v0.1.0-blue.svg)](https://www.npmjs.com/package/bangala)
+[![npm](https://img.shields.io/badge/npm-v0.2.0-blue.svg)](https://www.npmjs.com/package/bangala)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 </div>
@@ -34,11 +34,11 @@ only travels to the client where you explicitly ask for it.
 
 ## Status
 
-v0.1.0 is the first public release. It ships **sub-project 1** (the `.bangala`
-compiler and server runtime) and **sub-project 2** (the client islands
-runtime). File-based routing, the dev server + build pipeline, and the CLI are
-the next three sub-projects on the roadmap and are not in this release. Design
-specs live under [`docs/superpowers/specs/`](./docs/superpowers/specs).
+v0.2.0 ships **sub-project 1** (the `.bangala` compiler and server runtime),
+**sub-project 2** (the client islands runtime), and **sub-project 3**
+(file-based routing). The dev server + build pipeline and the CLI are the next
+two sub-projects on the roadmap. Design specs live under
+[`docs/superpowers/specs/`](./docs/superpowers/specs).
 
 ## Install
 
@@ -95,8 +95,23 @@ const html = await page.render({ user: { name: "Ada" } });
 //                 data-strategy="load"><button>Counter: 10</button></bangala-island>
 ```
 
-**4. Wire the client runtime in the page HTML.** The runtime is published as
-`bangala/client/auto`. In v0.1.0 the bundling of that entry to a browser
+**4. Build a route manifest.** The routing core is published as
+`bangala/router`. It is framework-agnostic and does not start an HTTP server;
+sub-project 4 will wire it into dev/build tooling:
+
+```ts
+import { discoverRoutes, matchRoute } from "bangala/router";
+
+const routes = await discoverRoutes("pages");
+const match = matchRoute(routes, "/blog/hello-world");
+
+// pages/index.bangala          -> /
+// pages/blog/[slug].bangala    -> /blog/:slug
+// pages/docs/[...parts].bangala -> /docs/*parts
+```
+
+**5. Wire the client runtime in the page HTML.** The runtime is published as
+`bangala/client/auto`. In v0.2.0 the bundling of that entry to a browser
 script is your responsibility (sub-project 4 will automate it):
 
 ```html
@@ -140,6 +155,31 @@ interface IslandRef {
 ```
 
 The compiled module exports `render(props): Promise<string>`.
+
+### `discoverRoutes(root, options?)`
+
+Walks a directory and returns a sorted manifest of `.bangala` page routes.
+Private files and folders starting with `_` or `.` are ignored.
+
+```ts
+import { discoverRoutes, createRoutes, matchRoute } from "bangala/router";
+
+const routes = await discoverRoutes("pages");
+const match = matchRoute(routes, "/docs/install");
+```
+
+Supported file conventions:
+
+| File | Route |
+|---|---|
+| `pages/index.bangala` | `/` |
+| `pages/about.bangala` | `/about` |
+| `pages/blog/index.bangala` | `/blog` |
+| `pages/blog/[slug].bangala` | `/blog/:slug` |
+| `pages/docs/[...parts].bangala` | `/docs/*parts` |
+
+`matchRoute(routes, pathname)` returns `{ route, pathname, params }` or `null`.
+Dynamic params are strings; catch-all params are string arrays.
 
 ### `hydrate(root?, options?)`
 
@@ -215,13 +255,13 @@ alongside them are free to evolve.
 ## Roadmap
 
 bangala.js is structured as five sub-projects, each with its own spec/plan
-cycle. v0.1.0 delivers the first two; the remaining three are queued:
+cycle. v0.2.0 delivers the first three; the remaining two are queued:
 
 | # | Sub-project | Status |
 |---|---|---|
 | 1 | `.bangala` compiler + server runtime | Shipped in v0.1.0 |
 | 2 | Client islands runtime | Shipped in v0.1.0 |
-| 3 | File-based routing | Planned |
+| 3 | File-based routing | Shipped in v0.2.0 |
 | 4 | Dev server + build (Vite) | Planned |
 | 5 | CLI + scaffolding + deploy adapters | Planned |
 
