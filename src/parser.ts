@@ -156,6 +156,15 @@ class Scanner {
   private parseTag(): TemplateNode {
     this.pos++; // consume "<"
     const tag = this.readName();
+    if (tag === "slot") {
+      const { selfClosing } = this.parseAttributes();
+      if (!selfClosing) {
+        const close = "</slot>";
+        if (!this.startsWith(close)) this.error("Unclosed <slot>");
+        this.pos += close.length;
+      }
+      return { type: "Slot" };
+    }
     const { attributes, selfClosing } = this.parseAttributes();
     const isComponent = /^[A-Z]/.test(tag);
     if (isComponent) {
@@ -176,9 +185,26 @@ class Scanner {
     attributes: Attribute[],
     selfClosing: boolean,
   ): TemplateNode {
-    // Replaced with full implementation in Task 8.
-    void selfClosing;
-    return { type: "Element", tag, attributes, children: [] };
+    const directive = attributes.find((a) => a.name.startsWith("client:"));
+    const props = attributes.filter((a) => !a.name.startsWith("client:"));
+    if (directive && directive.name !== "client:load") {
+      this.error(`Unknown directive '${directive.name}' (v1 supports only client:load)`);
+    }
+    let children: TemplateNode[] = [];
+    if (!selfClosing) {
+      children = this.parseNodes(true);
+      const close = `</${tag}>`;
+      if (!this.startsWith(close)) this.error(`Unclosed <${tag}>`);
+      this.pos += close.length;
+    }
+    return {
+      type: "Component",
+      name: tag,
+      attributes: props,
+      children,
+      island: directive !== undefined,
+      strategy: directive ? "client:load" : null,
+    };
   }
 
   private parseText(): TemplateNode {

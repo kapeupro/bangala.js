@@ -62,3 +62,42 @@ describe("parse — elements", () => {
     expect(() => parse("<div>")).toThrow(/Unclosed <div>/);
   });
 });
+
+describe("parse — components", () => {
+  it("parses a self-closing component", () => {
+    expect(parse(`<Counter start={3}/>`).nodes).toEqual([
+      {
+        type: "Component",
+        name: "Counter",
+        attributes: [{ name: "start", value: "3", dynamic: true }],
+        children: [],
+        island: false,
+        strategy: null,
+      },
+    ]);
+  });
+
+  it("marks a component as an island via client:load", () => {
+    const node = parse(`<Counter client:load/>`).nodes[0];
+    expect(node).toMatchObject({ type: "Component", island: true, strategy: "client:load" });
+  });
+
+  it("parses a component with children", () => {
+    expect(parse(`<Layout><h1>Hi</h1></Layout>`).nodes).toEqual([
+      {
+        type: "Component",
+        name: "Layout",
+        attributes: [],
+        children: [
+          { type: "Element", tag: "h1", attributes: [], children: [{ type: "Text", value: "Hi" }] },
+        ],
+        island: false,
+        strategy: null,
+      },
+    ]);
+  });
+
+  it("parses <slot/>", () => {
+    expect(parse("<slot/>").nodes).toEqual([{ type: "Slot" }]);
+  });
+});
