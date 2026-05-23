@@ -1,0 +1,18 @@
+---
+import Layout from "./Layout.bangala"
+import Counter from "./Counter.bangala"
+const { user } = props
+---
+<Layout title="Accueil">
+  <h1>Bonjour {user.name}</h1>
+  {#if user.posts.length === 0}
+    <p>Aucun article pour l'instant.</p>
+  {:else}
+    <ul>
+      {#each user.posts as post}
+        <li>{post.title}</li>
+      {/each}
+    </ul>
+  {/if}
+  <Counter start={10} client:load />
+</Layout>

@@ -1,0 +1,4 @@
+---
+const { start } = props
+---
+<button>Compteur : {start}</button>
