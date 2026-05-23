@@ -8,6 +8,9 @@ build/
 # Test coverage
 coverage/
 
+# Test-generated temporary modules
+tests/.tmp/
+
 # Logs
 *.log
 npm-debug.log*
