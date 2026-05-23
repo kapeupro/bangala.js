@@ -1,5 +1,72 @@
 ---
 import Layout from "./components/Layout.bangala"
+import CodeBlock from "./components/CodeBlock.bangala"
+import LiveDemo from "./components/LiveDemo.bangala"
+
+const DASH = "-".repeat(3)
+const heroSource = [
+  DASH,
+  "const posts = await db.posts.recent()",
+  DASH,
+  "",
+  "<h1>Le blog</h1>",
+  "{#each posts as post}",
+  "  <article>{post.title}</article>",
+  "{/each}",
+  "",
+  "<Newsletter client:load />",
+].join("\n")
+
+const writeSource = [
+  "<h1>Le blog</h1>",
+  "{#each posts as post}",
+  "  <article>{post.title}</article>",
+  "{/each}",
+  "",
+  "<Newsletter client:load />",
+].join("\n")
+
+const compileSource = [
+  'import { compile } from "bangala";',
+  "",
+  'const result = compile(source, { filename: "blog.bangala" });',
+  "// result.code         → ESM module source",
+  "// result.islands      → island manifest",
+  "// result.dependencies → imported files",
+].join("\n")
+
+const hydrateSource = [
+  'import { hydrate } from "bangala/client";',
+  "",
+  "hydrate(document);",
+].join("\n")
+
+const steps = [
+  {
+    num: "01",
+    title: "Écrire",
+    desc: "Du HTML enrichi, frontmatter serveur inclus.",
+    code: writeSource,
+    filename: "blog.bangala",
+    lang: "bangala",
+  },
+  {
+    num: "02",
+    title: "Compiler",
+    desc: "Un module ESM pur, prêt pour le SSR.",
+    code: compileSource,
+    filename: "build.ts",
+    lang: "ts",
+  },
+  {
+    num: "03",
+    title: "Hydrater",
+    desc: "Une seule ligne pour activer les îlots.",
+    code: hydrateSource,
+    filename: "entry.client.ts",
+    lang: "ts",
+  },
+]
 
 const tools = ["Bun", "TypeScript", "Vite", "Node.js", "Deno", "Cloudflare"]
 
@@ -79,7 +146,7 @@ const comparisons = [
   },
 ]
 ---
-<Layout title="bangala.js - HTML-first framework">
+<Layout title="bangala.js - HTML-first framework" description="bangala.js — le framework HTML-first qui envoie la page, pas le framework. Zéro JavaScript par défaut. Islands Architecture. Compilateur, runtime, routeur et CLI inclus." path="/">
   <section class="hero">
     <div class="hero-bg"></div>
     <div class="hero-grid"></div>
@@ -107,24 +174,8 @@ const comparisons = [
       </a>
     </div>
 
-    <div class="hero-code" id="hero-code">
-      <div class="code-header">
-        <div class="dots" aria-hidden="true"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-        <span class="code-fname">blog.bangala</span>
-        <span class="code-meta">server → html</span>
-      </div>
-      <div class="code-body" id="code-body">
-<span class="ln">1</span><span class="cmt">--- serveur ---</span>
-<span class="ln">2</span><span class="kw">const</span> <span class="fn">posts</span> = <span class="kw">await</span> <span class="fn">db</span><span class="punct">.</span>posts<span class="punct">.</span><span class="fn">recent</span><span class="punct">()</span>
-<span class="ln">3</span><span class="cmt">---</span>
-<span class="ln">4</span>
-<span class="ln">5</span><span class="ctag">&lt;h1&gt;</span>Le blog<span class="ctag">&lt;/h1&gt;</span>
-<span class="ln">6</span><span class="br">&#123;#each</span> posts <span class="kw">as</span> post<span class="br">&#125;</span>
-<span class="ln">7</span>  <span class="ctag">&lt;article&gt;</span><span class="punct">&#123;</span>post<span class="punct">.</span>title<span class="punct">&#125;</span><span class="ctag">&lt;/article&gt;</span>
-<span class="ln">8</span><span class="br">&#123;/each&#125;</span>
-<span class="ln">9</span>
-<span class="ln">10</span><span class="ctag">&lt;Newsletter</span> <span class="attr">client:load</span> <span class="ctag">/&gt;</span>  <span class="cmt">&lt;!-- seul JS --&gt;</span><span class="cursor"></span>
-      </div>
+    <div id="hero-code" class="hero-code-wrap">
+      <CodeBlock code={heroSource} filename="blog.bangala" lang="bangala" meta="server → html" />
     </div>
   </section>
 
@@ -136,6 +187,29 @@ const comparisons = [
       {/each}
     </div>
   </div>
+
+  <section class="how">
+    <div class="how-inner">
+      <p class="section-label reveal">Comment ça marche</p>
+      <h2 class="section-title reveal">Trois étapes.<br/>Pas une de plus.</h2>
+      <p class="section-sub reveal">De la page <code class="inline-code">.bangala</code> au HTML servi : écrire, compiler, hydrater. C'est tout.</p>
+
+      <div class="how-grid">
+        {#each steps as step}
+          <div class="how-step reveal">
+            <div class="how-step-head">
+              <span class="how-step-num">{step.num}</span>
+              <div class="how-step-meta">
+                <div class="how-step-title">{step.title}</div>
+                <div class="how-step-desc">{step.desc}</div>
+              </div>
+            </div>
+            <CodeBlock code={step.code} filename={step.filename} lang={step.lang} />
+          </div>
+        {/each}
+      </div>
+    </div>
+  </section>
 
   <section class="section" id="docs">
     <div class="stats-grid">
@@ -195,6 +269,8 @@ const comparisons = [
       </div>
     </div>
   </section>
+
+  <LiveDemo />
 
   <section class="cta-section" id="start">
     <div class="cta-glow"></div>

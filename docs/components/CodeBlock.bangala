@@ -1,0 +1,29 @@
+---
+const {
+  code = "",
+  filename = "",
+  lang = "bangala",
+  meta = "",
+} = props;
+
+const codeClass = "lang-" + lang;
+---
+<div class="code-block">
+  <div class="code-header">
+    <div class="dots" aria-hidden="true">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+    </div>
+    {#if filename}
+      <span class="code-fname">{filename}</span>
+    {/if}
+    {#if meta}
+      <span class="code-meta">{meta}</span>
+    {/if}
+    <button type="button" class="code-copy" data-code-copy aria-label="Copier le code">
+      <span class="code-copy-label" aria-live="polite">Copier</span>
+    </button>
+  </div>
+  <pre class="code-pre"><code class={codeClass}>{code}</code></pre>
+</div>

@@ -1,0 +1,139 @@
+---
+import Layout from "../components/Layout.bangala"
+---
+<Layout title="Islands Architecture | bangala.js">
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <h3>Getting Started</h3>
+      <ul>
+        <li><a href="/docs">Introduction</a></li>
+        <li><a href="/docs/installation">Installation</a></li>
+      </ul>
+      <h3>Core Concepts</h3>
+      <ul>
+        <li><a href="/docs/islands" class="active">Islands Architecture</a></li>
+        <li><a href="/docs/routing">File-based Routing</a></li>
+        <li><a href="/docs/syntax">.bangala Syntax</a></li>
+      </ul>
+      <h3>Deployment</h3>
+      <ul>
+        <li><a href="/docs/adapters">Adapters</a></li>
+      </ul>
+    </aside>
+    <div class="docs-content">
+      <p class="section-label">Core Concepts</p>
+      <h1>Islands Architecture</h1>
+      <p class="section-sub">bangala.js renders every page to static HTML on the server, then ships JavaScript only for the components you explicitly mark as interactive.</p>
+
+      <h2>What is an island?</h2>
+      <p>An <strong>island</strong> is a component whose interactivity travels to the client. Everything else stays as plain HTML: no hydration, no JavaScript, no runtime overhead. The SSR HTML you produced on the server stays exactly where it was rendered &mdash; the browser just upgrades the islands in place.</p>
+      <p>This is the inverse of a Single-Page App: instead of shipping a full framework and re-rendering everything, bangala.js sends a few small modules that wake up only the components that need it. The rest of the page is just HTML.</p>
+
+      <h2>Marking a component as an island</h2>
+      <p>Any capitalized component becomes an island when you add a <code>client:*</code> directive in the template. Without a directive, the component is rendered to HTML on the server and that&rsquo;s it &mdash; no JS goes to the client.</p>
+      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
+        <div class="code-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-fname">pages/index.bangala</span>
+        </div>
+        <div class="code-body">
+<span class="ln">1</span><span class="ctag">---</span>
+<span class="ln">2</span><span class="kw">import</span> Counter <span class="kw">from</span> <span class="str">"../components/Counter.bangala"</span>
+<span class="ln">3</span><span class="ctag">---</span>
+<span class="ln">4</span><span class="ctag">&lt;h1&gt;</span>Hello<span class="ctag">&lt;/h1&gt;</span>
+<span class="ln">5</span><span class="ctag">&lt;Counter</span> start=&#123;10&#125; client:load <span class="ctag">/&gt;</span>
+        </div>
+      </div>
+      <p>The compiler wraps the SSR output of <code>Counter</code> in a <code>&lt;bangala-island&gt;</code> marker carrying the entry path, props, and chosen strategy. The client runtime scans for these markers and hydrates each one independently.</p>
+
+      <h2>The three hydration strategies</h2>
+      <p>Pick the strategy that matches when the island actually needs to be interactive. The default loader runs as soon as the strategy fires.</p>
+      <table class="docs-table">
+        <thead>
+          <tr><th>Directive</th><th>When it runs</th><th>Use for</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>client:load</code></td>
+            <td>Immediately, as soon as the runtime sees the island.</td>
+            <td>Above-the-fold, critical interactivity (e.g. the main nav, a primary CTA).</td>
+          </tr>
+          <tr>
+            <td><code>client:idle</code></td>
+            <td><code>requestIdleCallback</code> with a 2000ms timeout. Falls back to a <code>setTimeout</code> microtask on Safari and any other browser without idle callbacks.</td>
+            <td>Nice-to-have widgets that can wait until the browser is idle.</td>
+          </tr>
+          <tr>
+            <td><code>client:visible</code></td>
+            <td><code>IntersectionObserver</code> with a 200px <code>rootMargin</code>. Falls back to immediate mount when <code>IntersectionObserver</code> is unavailable.</td>
+            <td>Below-the-fold components &mdash; charts, embeds, comments.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>The mount contract</h2>
+      <p>An island module must export a <code>mount</code> function. The runtime calls it after the strategy has fired and the module is loaded:</p>
+      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
+        <div class="code-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-fname">components/Counter.client.ts</span>
+        </div>
+        <div class="code-body">
+<span class="ln">1</span><span class="kw">export</span> <span class="kw">async</span> <span class="kw">function</span> <span class="fn">mount</span>(el, props, ctx) &#123;
+<span class="ln">2</span>  <span class="cmt">// el: the HTMLElement of the island marker</span>
+<span class="ln">3</span>  <span class="cmt">// props: JSON-decoded props from data-props</span>
+<span class="ln">4</span>  <span class="cmt">// ctx: &#123; strategy, entry &#125; &mdash; how this island was scheduled</span>
+<span class="ln">5</span>  <span class="kw">let</span> count = props.start ?? 0
+<span class="ln">6</span>  <span class="kw">const</span> button = document.createElement(<span class="str">"button"</span>)
+<span class="ln">7</span>  button.textContent = count
+<span class="ln">8</span>  button.addEventListener(<span class="str">"click"</span>, () =&gt; &#123;
+<span class="ln">9</span>    count++
+<span class="ln">10</span>    button.textContent = count
+<span class="ln">11</span>  &#125;)
+<span class="ln">12</span>  el.replaceChildren(button)
+<span class="ln">13</span>&#125;
+        </div>
+      </div>
+      <p>The signature is <code>mount(el: HTMLElement, props: Record&lt;string, unknown&gt;, ctx: MountContext)</code> where <code>MountContext</code> is <code>&#123; strategy: "load" | "idle" | "visible", entry: string &#125;</code>. Returning a promise is fine &mdash; the runtime awaits it before marking the island as hydrated.</p>
+
+      <h2>Error handling</h2>
+      <p>If anything goes wrong while scanning, loading, or mounting an island, the runtime stamps <code>data-hydrated="error"</code> and <code>data-hydration-error="&lt;code&gt;"</code> on the marker, logs the failure to the console, and dispatches a <code>bangala:island-error</code> CustomEvent that bubbles up the DOM. You can also pass an <code>onError</code> callback to <code>hydrate()</code>.</p>
+      <table class="docs-table">
+        <thead>
+          <tr><th>Error code</th><th>Cause</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>missing-entry</code></td><td>The marker element has no <code>data-entry</code> attribute.</td></tr>
+          <tr><td><code>invalid-props</code></td><td><code>data-props</code> could not be parsed as a JSON object.</td></tr>
+          <tr><td><code>unknown-strategy</code></td><td><code>data-strategy</code> is not one of <code>load</code>, <code>idle</code>, <code>visible</code>.</td></tr>
+          <tr><td><code>import-failed</code></td><td>The dynamic import of the entry module threw.</td></tr>
+          <tr><td><code>missing-mount</code></td><td>The imported module does not export a <code>mount</code> function.</td></tr>
+          <tr><td><code>mount-failed</code></td><td>The <code>mount</code> call itself threw or rejected.</td></tr>
+        </tbody>
+      </table>
+      <p>A throw from your <code>onError</code> callback is swallowed: one broken island never aborts the rest of the page&rsquo;s hydration.</p>
+
+      <h2>Idempotence</h2>
+      <p>Each island marker carries a tri-state <code>data-hydrated</code> attribute: it is unset before the runtime sees the marker, <code>"scheduled"</code> once a strategy has been attached, <code>"true"</code> after <code>mount()</code> has resolved, and <code>"error"</code> if any step fails. The scanner only picks up markers without the attribute, so calling <code>hydrate()</code> a second time is a no-op.</p>
+
+      <div class="cta-actions" style="margin-top: 3rem; justify-content: flex-start;">
+        <a href="/docs/routing" class="btn-primary">Next: File-based Routing</a>
+      </div>
+    </div>
+  </div>
+</Layout>
+<style>
+.docs-layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 4rem 2rem; gap: 4rem; align-items: flex-start; }
+.docs-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 100px; }
+.docs-sidebar h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+.docs-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.docs-sidebar li { margin-bottom: 0.5rem; }
+.docs-sidebar a { color: var(--text2); text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+.docs-sidebar a:hover, .docs-sidebar a.active { color: var(--accent); }
+.docs-content { flex-grow: 1; max-width: 760px; }
+.docs-content h1 { font-size: 3rem; margin-bottom: 1.5rem; letter-spacing: -1px; }
+.docs-content h2 { font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; letter-spacing: -0.5px; }
+.docs-content p { color: var(--text2); font-size: 1.1rem; line-height: 1.7; margin-bottom: 1.5rem; }
+.docs-content code { background: var(--bg2); padding: 0.2em 0.4em; border-radius: 4px; font-family: var(--mono); font-size: 0.9em; color: var(--accent); border: 1px solid var(--border); }
+@media (max-width: 768px) { .docs-layout { flex-direction: column; gap: 2rem; } .docs-sidebar { width: 100%; position: static; } }
+</style>

@@ -1,0 +1,52 @@
+---
+const BASE_URL = "https://bangala.eu";
+
+const {
+  title,
+  description,
+  path,
+  image = "/og-image.svg",
+} = props;
+
+const absoluteUrl = BASE_URL + path;
+const absoluteImage = BASE_URL + image;
+
+const jsonLd = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "bangala.js",
+  "description": description,
+  "codeRepository": "https://github.com/kapeupro/bangala.js",
+  "programmingLanguage": {
+    "@type": "ComputerLanguage",
+    "name": "JavaScript"
+  },
+  "license": "https://opensource.org/licenses/MIT",
+  "version": "0.4.0"
+});
+---
+<title>{title}</title>
+<meta name="description" content={description}/>
+<link rel="canonical" href={absoluteUrl}/>
+
+<!-- Open Graph -->
+<meta property="og:type" content="website"/>
+<meta property="og:url" content={absoluteUrl}/>
+<meta property="og:title" content={title}/>
+<meta property="og:description" content={description}/>
+<meta property="og:image" content={absoluteImage}/>
+<meta property="og:site_name" content="bangala.js"/>
+<meta property="og:locale" content="fr_FR"/>
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content={title}/>
+<meta name="twitter:description" content={description}/>
+<meta name="twitter:image" content={absoluteImage}/>
+
+<!-- Theme & indexing -->
+<meta name="theme-color" content="#f97316"/>
+<meta name="robots" content="index, follow"/>
+
+<!-- JSON-LD structured data -->
+<script type="application/ld+json">{jsonLd}</script>

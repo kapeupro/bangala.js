@@ -1,0 +1,73 @@
+<section class="live-demo">
+  <p class="section-label reveal">Démo en direct</p>
+  <h2 class="section-title reveal">Voyez la techno<br/><span class="gradient-text">en action sur cette page.</span></h2>
+  <p class="section-sub reveal">Trois îlots, trois stratégies d'hydratation. Le HTML est servi par GitHub Pages — le JavaScript ne se charge que quand bangala le décide.</p>
+
+  <div class="demo-grid reveal">
+    <div class="demo-card">
+      <div class="demo-meta">
+        <span class="demo-strategy strategy-load">client:load</span>
+        <span class="demo-status" data-island-status>en attente…</span>
+      </div>
+      <h3>Compteur</h3>
+      <p class="demo-desc">Hydraté immédiatement.</p>
+      <bangala-island
+        data-entry="/islands/counter.js"
+        data-props='{"start":0}'
+        data-strategy="load">
+        <button class="demo-btn">count=0</button>
+      </bangala-island>
+    </div>
+
+    <div class="demo-card">
+      <div class="demo-meta">
+        <span class="demo-strategy strategy-idle">client:idle</span>
+        <span class="demo-status" data-island-status>en attente…</span>
+      </div>
+      <h3>Thème</h3>
+      <p class="demo-desc">Hydraté à l'idle du navigateur.</p>
+      <bangala-island
+        data-entry="/islands/theme-toggle.js"
+        data-strategy="idle">
+        <button class="demo-btn">🌙 Dark</button>
+      </bangala-island>
+    </div>
+
+    <div class="demo-card">
+      <div class="demo-meta">
+        <span class="demo-strategy strategy-visible">client:visible</span>
+        <span class="demo-status" data-island-status>en attente…</span>
+      </div>
+      <h3>Bytes envoyés</h3>
+      <p class="demo-desc">Hydraté à l'entrée dans le viewport.</p>
+      <bangala-island
+        data-entry="/islands/bytes-counter.js"
+        data-strategy="visible">
+        <span class="bytes-value">300</span><span class="bytes-unit"> bytes</span>
+      </bangala-island>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+import "bangala/client/auto";
+
+// Update each demo card's status badge as its island hydrates or errors.
+function watchIsland(el) {
+  const status = el.parentElement?.querySelector('[data-island-status]');
+  if (!status) return;
+  const obs = new MutationObserver(() => {
+    if (el.dataset.hydrated === "true") {
+      status.textContent = "hydraté ✓";
+      status.classList.add("ok");
+      obs.disconnect();
+    } else if (el.dataset.hydrated === "error") {
+      status.textContent = `erreur (${el.dataset.hydrationError ?? "?"})`;
+      status.classList.add("err");
+      obs.disconnect();
+    }
+  });
+  obs.observe(el, { attributes: true, attributeFilter: ['data-hydrated'] });
+}
+document.querySelectorAll('.live-demo bangala-island').forEach(watchIsland);
+</script>

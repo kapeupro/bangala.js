@@ -1,7 +1,7 @@
 ---
 import Layout from "../components/Layout.bangala"
 ---
-<Layout title="Documentation | bangala.js">
+<Layout title="Documentation | bangala.js" description="Documentation officielle de bangala.js : guide de démarrage, syntaxe .bangala, Islands Architecture, déploiement." path="/docs">
   <div class="docs-layout">
     <aside class="docs-sidebar">
       <h3>Getting Started</h3>

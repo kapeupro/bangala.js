@@ -1,4 +1,6 @@
 ---
+import SeoHead from "./SeoHead.bangala"
+
 const navLinks = [
   { label: "Docs", href: "/docs" },
   { label: "npm", href: "https://www.npmjs.com/package/bangala" },
@@ -12,14 +14,18 @@ const footerLinks = [
   { label: "Issues", href: "https://github.com/kapeupro/bangala.js/issues" },
 ]
 
-const { title = "bangala.js - HTML-first framework" } = props;
+const {
+  title = "bangala.js - HTML-first framework",
+  description = "bangala.js — le framework HTML-first qui n'envoie de JavaScript que là où vous le réclamez. Zéro bundle par défaut. Islands Architecture native.",
+  path = "/",
+} = props;
 ---
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>{title}</title>
+<SeoHead title={title} description={description} path={path}/>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -202,6 +208,24 @@ if (window.gsap && window.ScrollTrigger) {
     stagger: 0.04, duration: 0.4, ease: 'power2.out', delay: 0.3
   });
 }
+</script>
+<script>
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-code-copy]');
+  if (!btn) return;
+  const block = btn.closest('.code-block');
+  const pre = block && block.querySelector('pre');
+  if (!pre) return;
+  const text = pre.textContent || '';
+  const label = btn.querySelector('.code-copy-label');
+  const restore = label ? label.textContent : '';
+  const flash = (msg) => { if (label) label.textContent = msg; btn.classList.add('is-copied'); setTimeout(() => { if (label) label.textContent = restore; btn.classList.remove('is-copied'); }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => flash('Copié !')).catch(() => flash('Erreur'));
+  } else {
+    flash('Erreur');
+  }
+});
 </script>
 </body>
 </html>

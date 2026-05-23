@@ -1,7 +1,7 @@
 ---
 import Layout from "../components/Layout.bangala"
 ---
-<Layout title="Installation | bangala.js">
+<Layout title="Installation | bangala.js" description="Installer bangala.js avec npm et créer son premier projet. Quickstart complet pour la v0.4.0." path="/docs/installation">
   <div class="docs-layout">
     <aside class="docs-sidebar">
       <h3>Getting Started</h3>

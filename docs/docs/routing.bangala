@@ -1,0 +1,150 @@
+---
+import Layout from "../components/Layout.bangala"
+---
+<Layout title="File-based Routing | bangala.js">
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <h3>Getting Started</h3>
+      <ul>
+        <li><a href="/docs">Introduction</a></li>
+        <li><a href="/docs/installation">Installation</a></li>
+      </ul>
+      <h3>Core Concepts</h3>
+      <ul>
+        <li><a href="/docs/islands">Islands Architecture</a></li>
+        <li><a href="/docs/routing" class="active">File-based Routing</a></li>
+        <li><a href="/docs/syntax">.bangala Syntax</a></li>
+      </ul>
+      <h3>Deployment</h3>
+      <ul>
+        <li><a href="/docs/adapters">Adapters</a></li>
+      </ul>
+    </aside>
+    <div class="docs-content">
+      <p class="section-label">Core Concepts</p>
+      <h1>File-based Routing</h1>
+      <p class="section-sub">Drop a <code>.bangala</code> file in <code>pages/</code> and bangala turns it into a route. No config file, no route table to maintain by hand.</p>
+
+      <h2>File-based routing</h2>
+      <p>Every <code>.bangala</code> file under your pages directory (<code>pages/</code> by default) becomes a route. The file&rsquo;s path on disk <em>is</em> the URL. Folders create nested URLs. Bracket-named files create dynamic segments.</p>
+      <p>This means you can navigate your routes the same way you navigate your codebase: opening <code>pages/blog/[slug].bangala</code> tells you everything about what <code>/blog/&lt;anything&gt;</code> renders.</p>
+
+      <h2>Route conventions</h2>
+      <p>The router turns file paths into URL patterns using these rules:</p>
+      <table class="docs-table">
+        <thead>
+          <tr><th>File</th><th>Route</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>pages/index.bangala</code></td><td><code>/</code></td></tr>
+          <tr><td><code>pages/about.bangala</code></td><td><code>/about</code></td></tr>
+          <tr><td><code>pages/blog/index.bangala</code></td><td><code>/blog</code></td></tr>
+          <tr><td><code>pages/blog/[slug].bangala</code></td><td><code>/blog/:slug</code></td></tr>
+          <tr><td><code>pages/docs/[...parts].bangala</code></td><td><code>/docs/*parts</code></td></tr>
+        </tbody>
+      </table>
+      <p>A few additional rules worth knowing:</p>
+      <ul class="compare-list" style="margin-top: 1rem;">
+        <li><span class="check">&middot;</span> Files and folders whose names start with <code>_</code> or <code>.</code> are <strong>private</strong>: they are not exposed as routes. Use this for partials, components co-located with a page, or anything else you don&rsquo;t want to ship to the browser.</li>
+        <li><span class="check">&middot;</span> A catch-all segment (<code>[...parts]</code>) must be the <strong>last</strong> segment of its path. <code>pages/docs/[...parts]/extra.bangala</code> is a build error.</li>
+        <li><span class="check">&middot;</span> Two files cannot resolve to the same URL. <code>pages/about.bangala</code> and <code>pages/about/index.bangala</code> would conflict, and the build refuses to start.</li>
+      </ul>
+
+      <h2>Dynamic segments</h2>
+      <p>Wrap a path segment in square brackets to make it dynamic. The matched value is exposed as a route parameter that you can read from <code>props.params</code> in the page frontmatter:</p>
+      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
+        <div class="code-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-fname">pages/blog/[slug].bangala</span>
+        </div>
+        <div class="code-body">
+<span class="ln">1</span><span class="ctag">---</span>
+<span class="ln">2</span><span class="kw">const</span> &#123; slug &#125; = props.params
+<span class="ln">3</span><span class="kw">const</span> post = <span class="kw">await</span> loadPost(slug)
+<span class="ln">4</span><span class="ctag">---</span>
+<span class="ln">5</span><span class="ctag">&lt;article&gt;</span>
+<span class="ln">6</span>  <span class="ctag">&lt;h1&gt;</span>&#123;post.title&#125;<span class="ctag">&lt;/h1&gt;</span>
+<span class="ln">7</span>  <span class="ctag">&lt;p&gt;</span>&#123;post.body&#125;<span class="ctag">&lt;/p&gt;</span>
+<span class="ln">8</span><span class="ctag">&lt;/article&gt;</span>
+        </div>
+      </div>
+      <p>For a catch-all segment (<code>[...parts]</code>), the param is an array of decoded path segments. <code>/docs/getting/started</code> gives you <code>params.parts === ["getting", "started"]</code>.</p>
+
+      <h2>Nested routes</h2>
+      <p>Folders nest naturally. <code>pages/blog/2026/recap.bangala</code> serves <code>/blog/2026/recap</code>. There is no special &ldquo;layout&rdquo; convention in v0.4.0 &mdash; if you want a shared shell, import a layout component in the frontmatter the same way the docs site does:</p>
+      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
+        <div class="code-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-fname">pages/blog/index.bangala</span>
+        </div>
+        <div class="code-body">
+<span class="ln">1</span><span class="ctag">---</span>
+<span class="ln">2</span><span class="kw">import</span> Layout <span class="kw">from</span> <span class="str">"../../components/Layout.bangala"</span>
+<span class="ln">3</span><span class="ctag">---</span>
+<span class="ln">4</span><span class="ctag">&lt;Layout</span> title=<span class="str">"Blog"</span><span class="ctag">&gt;</span>
+<span class="ln">5</span>  <span class="ctag">&lt;h1&gt;</span>Articles<span class="ctag">&lt;/h1&gt;</span>
+<span class="ln">6</span><span class="ctag">&lt;/Layout&gt;</span>
+        </div>
+      </div>
+      <p>Nested layouts (Next.js-style <code>layout.bangala</code>) are not part of v0.4.0 &mdash; explicit component imports keep things obvious until the API stabilises.</p>
+
+      <h2>Specificity &amp; matching order</h2>
+      <p>When more than one route could match a URL, the router picks the most specific one. Static segments beat dynamic segments, dynamic segments beat catch-alls, and longer paths beat shorter ones. Concretely:</p>
+      <ul class="compare-list" style="margin-top: 1rem;">
+        <li><span class="check">1</span> <code>/blog/settings</code> wins over <code>/blog/:slug</code></li>
+        <li><span class="check">2</span> <code>/blog/:slug</code> wins over <code>/blog/*rest</code></li>
+        <li><span class="check">3</span> Within the same specificity class, longer paths win, then ties are broken alphabetically</li>
+      </ul>
+
+      <h2>The router manifest</h2>
+      <p>The router exposes a small programmatic API (<code>bangala/router</code>) so the dev server, the build, and any custom tooling all consume the same data structure. <code>discoverRoutes()</code> walks the pages directory and returns the manifest:</p>
+      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
+        <div class="code-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-fname">scripts/print-routes.ts</span>
+        </div>
+        <div class="code-body">
+<span class="ln">1</span><span class="kw">import</span> &#123; discoverRoutes, matchRoute &#125; <span class="kw">from</span> <span class="str">"bangala/router"</span>
+<span class="ln">2</span>
+<span class="ln">3</span><span class="kw">const</span> routes = <span class="kw">await</span> discoverRoutes(<span class="str">"./pages"</span>)
+<span class="ln">4</span><span class="cmt">// [</span>
+<span class="ln">5</span><span class="cmt">//   &#123; id: "root", file: ".../pages/index.bangala", path: "/", segments: [...], score: 0 &#125;,</span>
+<span class="ln">6</span><span class="cmt">//   &#123; id: "about", file: ".../pages/about.bangala", path: "/about", segments: [...], score: 101 &#125;,</span>
+<span class="ln">7</span><span class="cmt">//   &#123; id: "blog_$slug", file: ".../pages/blog/[slug].bangala", path: "/blog/:slug", segments: [...], score: 152 &#125;,</span>
+<span class="ln">8</span><span class="cmt">// ]</span>
+<span class="ln">9</span>
+<span class="ln">10</span><span class="kw">const</span> match = matchRoute(routes, <span class="str">"/blog/hello"</span>)
+<span class="ln">11</span><span class="cmt">// &#123; route, pathname: "/blog/hello", params: &#123; slug: "hello" &#125; &#125;</span>
+        </div>
+      </div>
+      <p>Each entry in the manifest is a <code>FileRoute</code>:</p>
+      <ul class="compare-list" style="margin-top: 1rem;">
+        <li><span class="check">&middot;</span> <code>id</code> &mdash; a stable identifier derived from the route path. Useful as a manifest key.</li>
+        <li><span class="check">&middot;</span> <code>file</code> &mdash; the absolute path of the source file.</li>
+        <li><span class="check">&middot;</span> <code>path</code> &mdash; the public route pattern (<code>/</code>, <code>/blog/:slug</code>, <code>/docs/*parts</code>).</li>
+        <li><span class="check">&middot;</span> <code>segments</code> &mdash; the parsed segments, each either static, dynamic, or catch-all.</li>
+        <li><span class="check">&middot;</span> <code>score</code> &mdash; the specificity score. Higher scores match first.</li>
+      </ul>
+      <p>Routes returned from <code>discoverRoutes()</code> are already sorted so you can iterate them top-to-bottom in your own matcher, or hand them straight to <code>matchRoute()</code>.</p>
+
+      <div class="cta-actions" style="margin-top: 3rem; justify-content: flex-start;">
+        <a href="/docs/syntax" class="btn-primary">Next: .bangala Syntax</a>
+      </div>
+    </div>
+  </div>
+</Layout>
+<style>
+.docs-layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 4rem 2rem; gap: 4rem; align-items: flex-start; }
+.docs-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 100px; }
+.docs-sidebar h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+.docs-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.docs-sidebar li { margin-bottom: 0.5rem; }
+.docs-sidebar a { color: var(--text2); text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+.docs-sidebar a:hover, .docs-sidebar a.active { color: var(--accent); }
+.docs-content { flex-grow: 1; max-width: 760px; }
+.docs-content h1 { font-size: 3rem; margin-bottom: 1.5rem; letter-spacing: -1px; }
+.docs-content h2 { font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; letter-spacing: -0.5px; }
+.docs-content p { color: var(--text2); font-size: 1.1rem; line-height: 1.7; margin-bottom: 1.5rem; }
+.docs-content code { background: var(--bg2); padding: 0.2em 0.4em; border-radius: 4px; font-family: var(--mono); font-size: 0.9em; color: var(--accent); border: 1px solid var(--border); }
+@media (max-width: 768px) { .docs-layout { flex-direction: column; gap: 2rem; } .docs-sidebar { width: 100%; position: static; } }
+</style>
