@@ -12,6 +12,8 @@ const VOID_ELEMENTS = new Set([
   "link", "meta", "param", "source", "track", "wbr",
 ]);
 
+const RAW_TEXT_ELEMENTS = new Set(["script", "style"]);
+
 export function parse(source: string, _filename = "<unknown>"): Template {
   const fm = source.match(/^\s*---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   const frontmatter = fm ? fm[1]!.trim() : "";
@@ -66,6 +68,10 @@ class Scanner {
         const end = this.src.indexOf("-->", this.pos);
         if (end === -1) this.error("Unclosed comment");
         this.pos = end + 3;
+        continue;
+      }
+      if (this.startsWith("<!")) {
+        nodes.push(this.parseDeclaration());
         continue;
       }
       if (this.src[this.pos] === "<") {
@@ -146,9 +152,17 @@ class Scanner {
 
   private readName(): string {
     const start = this.pos;
-    while (!this.eof() && /[A-Za-z0-9:-]/.test(this.src[this.pos]!)) this.pos++;
+    while (!this.eof() && /[A-Za-z0-9_:-]/.test(this.src[this.pos]!)) this.pos++;
     if (this.pos === start) this.error("Expected a tag or attribute name");
     return this.src.slice(start, this.pos);
+  }
+
+  private parseDeclaration(): TemplateNode {
+    const end = this.src.indexOf(">", this.pos);
+    if (end === -1) this.error("Unclosed declaration");
+    const value = this.src.slice(this.pos, end + 1);
+    this.pos = end + 1;
+    return { type: "Text", value };
   }
 
   private parseAttributes(): { attributes: Attribute[]; selfClosing: boolean } {
@@ -205,6 +219,14 @@ class Scanner {
     if (selfClosing || VOID_ELEMENTS.has(tag)) {
       return { type: "Element", tag, attributes, children: [] };
     }
+    if (RAW_TEXT_ELEMENTS.has(tag.toLowerCase())) {
+      const close = `</${tag}>`;
+      const end = this.src.indexOf(close, this.pos);
+      if (end === -1) this.error(`Unclosed <${tag}>`);
+      const value = this.src.slice(this.pos, end);
+      this.pos = end + close.length;
+      return { type: "Element", tag, attributes, children: [{ type: "Text", value }] };
+    }
     const children = this.parseNodes(true);
     const close = `</${tag}>`;
     if (!this.startsWith(close)) this.error(`Unclosed <${tag}>`);
@@ -217,10 +239,11 @@ class Scanner {
     attributes: Attribute[],
     selfClosing: boolean,
   ): TemplateNode {
+    const VALID_DIRECTIVES = new Set(["client:load", "client:idle", "client:visible"]);
     const directive = attributes.find((a) => a.name.startsWith("client:"));
     const props = attributes.filter((a) => !a.name.startsWith("client:"));
-    if (directive && directive.name !== "client:load") {
-      this.error(`Unknown directive '${directive.name}' (v1 supports only client:load)`);
+    if (directive && !VALID_DIRECTIVES.has(directive.name)) {
+      this.error(`Unknown directive '${directive.name}'`);
     }
     let children: TemplateNode[] = [];
     if (!selfClosing) {
@@ -235,7 +258,7 @@ class Scanner {
       attributes: props,
       children,
       island: directive !== undefined,
-      strategy: directive ? "client:load" : null,
+      strategy: directive ? (directive.name as "client:load" | "client:idle" | "client:visible") : null,
     };
   }
 
@@ -248,4 +271,3 @@ class Scanner {
     return { type: "Text", value };
   }
 }
-

@@ -45,6 +45,21 @@ describe("parse — elements", () => {
     ]);
   });
 
+  it("parses hyphenated and namespaced HTML/SVG attributes", () => {
+    expect(parse(`<svg data-target="logo" stroke-width="2" aria-label="Logo"></svg>`).nodes).toEqual([
+      {
+        type: "Element",
+        tag: "svg",
+        attributes: [
+          { name: "data-target", value: "logo", dynamic: false },
+          { name: "stroke-width", value: "2", dynamic: false },
+          { name: "aria-label", value: "Logo", dynamic: false },
+        ],
+        children: [],
+      },
+    ]);
+  });
+
   it("parses a self-closing void element", () => {
     expect(parse("<br/>").nodes).toEqual([
       { type: "Element", tag: "br", attributes: [], children: [] },
@@ -55,6 +70,30 @@ describe("parse — elements", () => {
     expect(parse("a<!-- note -->b").nodes).toEqual([
       { type: "Text", value: "a" },
       { type: "Text", value: "b" },
+    ]);
+  });
+
+  it("preserves document declarations as text", () => {
+    expect(parse("<!DOCTYPE html><html></html>").nodes).toEqual([
+      { type: "Text", value: "<!DOCTYPE html>" },
+      { type: "Element", tag: "html", attributes: [], children: [] },
+    ]);
+  });
+
+  it("preserves raw style and script contents", () => {
+    expect(parse("<style>body{color:red}</style><script>if (ok) { run() }</script>").nodes).toEqual([
+      {
+        type: "Element",
+        tag: "style",
+        attributes: [],
+        children: [{ type: "Text", value: "body{color:red}" }],
+      },
+      {
+        type: "Element",
+        tag: "script",
+        attributes: [],
+        children: [{ type: "Text", value: "if (ok) { run() }" }],
+      },
     ]);
   });
 
@@ -80,6 +119,20 @@ describe("parse — components", () => {
   it("marks a component as an island via client:load", () => {
     const node = parse(`<Counter client:load/>`).nodes[0];
     expect(node).toMatchObject({ type: "Component", island: true, strategy: "client:load" });
+  });
+
+  it("accepts client:idle and records it as the strategy", () => {
+    const node = parse(`<Counter client:idle/>`).nodes[0];
+    expect(node).toMatchObject({ type: "Component", island: true, strategy: "client:idle" });
+  });
+
+  it("accepts client:visible and records it as the strategy", () => {
+    const node = parse(`<Counter client:visible/>`).nodes[0];
+    expect(node).toMatchObject({ type: "Component", island: true, strategy: "client:visible" });
+  });
+
+  it("errors on an unknown client: directive", () => {
+    expect(() => parse(`<Counter client:hover/>`)).toThrow(/Unknown directive 'client:hover'/);
   });
 
   it("parses a component with children", () => {

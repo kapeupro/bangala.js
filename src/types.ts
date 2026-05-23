@@ -25,13 +25,15 @@ export interface ElementNode {
   children: TemplateNode[];
 }
 
+export type ClientDirective = "client:load" | "client:idle" | "client:visible";
+
 export interface ComponentNode {
   type: "Component";
   name: string;
   attributes: Attribute[];
   children: TemplateNode[];
   island: boolean;
-  strategy: "client:load" | null;
+  strategy: ClientDirective | null;
 }
 
 export interface IfBlockNode {
@@ -74,7 +76,7 @@ export interface CompileOptions {
 
 export interface IslandRef {
   componentPath: string;
-  strategy: "client:load";
+  strategy: ClientDirective;
 }
 
 export interface CompileResult {
