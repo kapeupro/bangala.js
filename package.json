@@ -1,6 +1,6 @@
 {
   "name": "bangala",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "The full-stack framework that ships minimal JavaScript.",
   "license": "MIT",
@@ -28,6 +28,9 @@
     "README.md",
     "LICENSE"
   ],
+  "bin": {
+    "bangala": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -44,6 +47,14 @@
     "./vite": {
       "types": "./dist/vite.d.ts",
       "import": "./dist/vite.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters.d.ts",
+      "import": "./dist/adapters.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
     },
     "./client": {
       "types": "./dist/client/index.d.ts",

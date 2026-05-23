@@ -7,7 +7,7 @@
 ### The full-stack framework that ships minimal JavaScript.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![npm](https://img.shields.io/badge/npm-v0.3.0-blue.svg)](https://www.npmjs.com/package/bangala)
+[![npm](https://img.shields.io/badge/npm-v0.4.0-blue.svg)](https://www.npmjs.com/package/bangala)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 </div>
@@ -34,10 +34,10 @@ only travels to the client where you explicitly ask for it.
 
 ## Status
 
-v0.3.0 ships **sub-project 1** (the `.bangala` compiler and server runtime),
+v0.4.0 ships **sub-project 1** (the `.bangala` compiler and server runtime),
 **sub-project 2** (the client islands runtime), **sub-project 3**
 (file-based routing), and **sub-project 4** (Vite dev server + build helpers).
-The CLI is the next sub-project on the roadmap. Design specs live under
+It also ships **sub-project 5**: CLI, scaffolding, and deploy adapters. Design specs live under
 [`docs/superpowers/specs/`](./docs/superpowers/specs).
 
 ## Install
@@ -50,27 +50,32 @@ Requires Node.js 22 or newer.
 
 ## Quickstart
 
-**1. Write a `.bangala` page.** `pages/index.bangala`:
+**1. Create a project.**
+
+```bash
+npx bangala create my-site --adapter netlify
+cd my-site
+npm install
+npm run dev
+```
+
+**2. Write a `.bangala` page.** `pages/index.bangala`:
 
 ```bangala
 ---
-import Counter from "./Counter.bangala"
 const { user } = props
 ---
 <h1>Hello {user.name}</h1>
-<Counter start={10} client:load />
 ```
 
-`pages/Counter.bangala`:
+**3. Build or deploy from the CLI.**
 
-```bangala
----
-const { start } = props
----
-<button>Counter: {start}</button>
+```bash
+npx bangala build
+npx bangala deploy vercel --force
 ```
 
-**2. Compile on the server.** `compile()` takes a source string and returns the
+**4. Compile on the server.** `compile()` takes a source string and returns the
 generated ESM module text plus the island manifest:
 
 ```ts
@@ -84,20 +89,18 @@ const result = compile(source, { filename: "pages/index.bangala" });
 // result.dependencies — paths of imported .bangala files (for watch mode)
 ```
 
-**3. Execute the compiled module.** It exports `render(props)` returning a
+**5. Execute the compiled module.** It exports `render(props)` returning a
 Promise of HTML. How you transpile and import the emitted code is your call
-(esbuild, tsx, or sub-project 4 once it lands). Once you have the module:
+(Vite, esbuild, tsx, or another ESM loader). Once you have the module:
 
 ```ts
 const html = await page.render({ user: { name: "Ada" } });
 // <h1>Hello Ada</h1>
-// <bangala-island data-entry="./Counter" data-props="{&quot;start&quot;:10}"
-//                 data-strategy="load"><button>Counter: 10</button></bangala-island>
 ```
 
-**4. Build a route manifest.** The routing core is published as
+**6. Build a route manifest.** The routing core is published as
 `bangala/router`. It is framework-agnostic and does not start an HTTP server;
-sub-project 4 will wire it into dev/build tooling:
+the Vite helpers and CLI wire it into dev/build tooling:
 
 ```ts
 import { discoverRoutes, matchRoute } from "bangala/router";
@@ -110,7 +113,7 @@ const match = matchRoute(routes, "/blog/hello-world");
 // pages/docs/[...parts].bangala -> /docs/*parts
 ```
 
-**5. Wire the client runtime in the page HTML.** The runtime is published as
+**7. Wire the client runtime in the page HTML.** The runtime is published as
 `bangala/client/auto`. The Vite build helper bundles it automatically; if you
 are wiring your own bundler, include it as a module script:
 
@@ -128,8 +131,8 @@ hydrate(document, {
 });
 ```
 
-**6. Use the Vite helpers.** `bangala/vite` ships the plugin and programmable
-dev/build helpers used by the future CLI:
+**8. Use the Vite helpers.** `bangala/vite` ships the plugin and programmable
+dev/build helpers used by the CLI:
 
 ```ts
 import { createBangalaDevServer, buildBangala } from "bangala/vite";
@@ -236,6 +239,41 @@ await buildBangala({
 });
 ```
 
+### CLI
+
+The package exposes a `bangala` binary:
+
+```bash
+bangala dev --port 5173
+bangala build --out-dir dist --prerender /blog/first-post
+bangala create my-site --adapter netlify
+bangala deploy cloudflare-pages --force
+```
+
+The generated project uses the same Vite helpers under the hood:
+
+```json
+{
+  "scripts": {
+    "dev": "bangala dev",
+    "build": "bangala build"
+  }
+}
+```
+
+### `bangala/adapters`
+
+Deployment adapters are plain file writers for static hosts:
+
+```ts
+import { applyDeployAdapter, listDeployAdapters } from "bangala/adapters";
+
+console.log(listDeployAdapters());
+await applyDeployAdapter(process.cwd(), "vercel", { outDir: "dist" });
+```
+
+Built-in adapters: `static`, `netlify`, `vercel`, `cloudflare-pages`.
+
 ### `hydrate(root?, options?)`
 
 Scans `root` (default: `document`) for `<bangala-island>` markers and hydrates
@@ -310,7 +348,7 @@ alongside them are free to evolve.
 ## Roadmap
 
 bangala.js is structured as five sub-projects, each with its own spec/plan
-cycle. v0.3.0 delivers the first four; the CLI remains queued:
+cycle. v0.4.0 delivers all five planned v1 foundations:
 
 | # | Sub-project | Status |
 |---|---|---|
@@ -318,7 +356,7 @@ cycle. v0.3.0 delivers the first four; the CLI remains queued:
 | 2 | Client islands runtime | Shipped in v0.1.0 |
 | 3 | File-based routing | Shipped in v0.2.0 |
 | 4 | Dev server + build (Vite) | Shipped in v0.3.0 |
-| 5 | CLI + scaffolding + deploy adapters | Planned |
+| 5 | CLI + scaffolding + deploy adapters | Shipped in v0.4.0 |
 
 Designs live in [`docs/superpowers/specs/`](./docs/superpowers/specs).
 

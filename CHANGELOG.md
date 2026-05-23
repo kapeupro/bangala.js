@@ -2,6 +2,14 @@
 
 All notable changes to bangala.js are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-05-23
+
+### Added
+
+- `bangala` CLI binary with `dev`, `build`, `create`, and `deploy` commands.
+- `bangala create` basic starter scaffold with `pages/index.bangala`, styles, package scripts, and optional deploy adapter config.
+- `bangala/adapters` public export with `static`, `netlify`, `vercel`, and `cloudflare-pages` deployment helpers.
+
 ## [0.3.0] - 2026-05-23
 
 ### Added
