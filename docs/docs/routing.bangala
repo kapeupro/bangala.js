@@ -1,5 +1,5 @@
 ---
-import Layout from "../components/Layout.bangala"
+import Layout from "../_components/Layout.bangala"
 ---
 <Layout title="File-based Routing | bangala.js">
   <div class="docs-layout">

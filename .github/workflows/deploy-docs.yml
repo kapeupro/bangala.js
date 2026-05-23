@@ -6,7 +6,10 @@ on:
       - main
     paths:
       - 'docs/**'
+      - 'public/**'
       - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 

@@ -1,0 +1,430 @@
+---
+import Layout from "../_components/Layout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const staticBangalaCode = [
+  "---",
+  "const posts = await db.posts.recent()",
+  "---",
+  "",
+  "<h1>Le blog</h1>",
+  "{#each posts as post}",
+  "  <article>{post.title}</article>",
+  "{/each}",
+].join("\n")
+
+const staticNextCode = [
+  "// app/blog/page.tsx",
+  "import { db } from \"@/lib/db\"",
+  "",
+  "export default async function BlogPage() {",
+  "  const posts = await db.posts.recent()",
+  "  return (",
+  "    <>",
+  "      <h1>Le blog</h1>",
+  "      {posts.map((post) => (",
+  "        <article key={post.id}>{post.title}</article>",
+  "      ))}",
+  "    </>",
+  "  )",
+  "}",
+].join("\n")
+
+const islandBangalaCode = [
+  "<!-- pages/index.bangala -->",
+  "<h1>Marketing page</h1>",
+  "<Counter start={10} client:visible />",
+].join("\n")
+
+const islandNextCode = [
+  "// app/page.tsx",
+  "import Counter from \"./Counter\"",
+  "",
+  "export default function Page() {",
+  "  return (",
+  "    <>",
+  "      <h1>Marketing page</h1>",
+  "      <Counter start={10} />",
+  "    </>",
+  "  )",
+  "}",
+  "",
+  "// app/Counter.tsx",
+  "\"use client\"",
+  "import { useState } from \"react\"",
+  "export default function Counter({ start }) {",
+  "  const [n, setN] = useState(start)",
+  "  return <button onClick={() => setN(n + 1)}>{n}</button>",
+  "}",
+].join("\n")
+
+const dataBangalaCode = [
+  "---",
+  "const user = await db.users.findById(params.id)",
+  "if (!user) throw new Error(\"404\")",
+  "---",
+  "",
+  "<h1>{user.name}</h1>",
+  "<p>{user.bio}</p>",
+].join("\n")
+
+const dataNextCode = [
+  "// app/users/[id]/page.tsx",
+  "import { notFound } from \"next/navigation\"",
+  "",
+  "export default async function UserPage({ params }) {",
+  "  const user = await db.users.findById(params.id)",
+  "  if (!user) notFound()",
+  "  return (",
+  "    <>",
+  "      <h1>{user.name}</h1>",
+  "      <p>{user.bio}</p>",
+  "    </>",
+  "  )",
+  "}",
+].join("\n")
+
+const rows = [
+  {
+    feature: "JS shippé pour une page statique",
+    bangala: { mark: "✓", text: "~0 kB" },
+    nextjs:  { mark: "△", text: "~80–280 kB (runtime React + Next)" },
+  },
+  {
+    feature: "Architecture",
+    bangala: { mark: "✓", text: "Islands explicites" },
+    nextjs:  { mark: "✓", text: "Server + Client Components" },
+  },
+  {
+    feature: "Hydratation",
+    bangala: { mark: "✓", text: "Opt-in (client:load/idle/visible)" },
+    nextjs:  { mark: "△", text: "Automatique pour les Client Components" },
+  },
+  {
+    feature: "Runtime client requis",
+    bangala: { mark: "✓", text: "Aucun, sauf pour les îlots" },
+    nextjs:  { mark: "✕", text: "React + runtime Next obligatoires" },
+  },
+  {
+    feature: "Routing file-based",
+    bangala: { mark: "✓", text: "Oui" },
+    nextjs:  { mark: "✓", text: "Oui (App Router)" },
+  },
+  {
+    feature: "SSR",
+    bangala: { mark: "✓", text: "Concat de strings, sync" },
+    nextjs:  { mark: "✓", text: "renderToReadableStream, streaming" },
+  },
+  {
+    feature: "SSG",
+    bangala: { mark: "✓", text: "Oui" },
+    nextjs:  { mark: "✓", text: "Oui (generateStaticParams)" },
+  },
+  {
+    feature: "API routes",
+    bangala: { mark: "✕", text: "Pas en v0.4" },
+    nextjs:  { mark: "✓", text: "Route Handlers (app/api/...)" },
+  },
+  {
+    feature: "Middleware (Edge)",
+    bangala: { mark: "✕", text: "Pas en v0.4" },
+    nextjs:  { mark: "✓", text: "middleware.ts" },
+  },
+  {
+    feature: "ISR / revalidation",
+    bangala: { mark: "✕", text: "Pas en v0.4" },
+    nextjs:  { mark: "✓", text: "revalidate, revalidatePath" },
+  },
+  {
+    feature: "Optimisation d'images",
+    bangala: { mark: "✕", text: "Pas en v0.4 (utilisez un CDN)" },
+    nextjs:  { mark: "✓", text: "next/image" },
+  },
+  {
+    feature: "Maturité de l'écosystème",
+    bangala: { mark: "△", text: "Jeune (v0.4, 2026)" },
+    nextjs:  { mark: "✓", text: "Établi depuis 2016" },
+  },
+  {
+    feature: "Backing d'une entreprise",
+    bangala: { mark: "✕", text: "Projet OSS communautaire" },
+    nextjs:  { mark: "✓", text: "Vercel" },
+  },
+  {
+    feature: "Taille du framework",
+    bangala: { mark: "✓", text: "~2 kB gzip (runtime îlots)" },
+    nextjs:  { mark: "△", text: "Beaucoup plus grand (React + Next)" },
+  },
+]
+
+const winsBangala = [
+  {
+    tag: "Marketing & vitrine",
+    title: "Sites marketing, landing, docs",
+    desc: "Aucune interactivité au-dessus de quelques boutons ? Vous n'avez aucune raison d'envoyer 280 kB de JS. bangala ship 0 kB par défaut, le TTI est instantané.",
+    code: [
+      "<h1>Notre produit</h1>",
+      "<p>Construit pour la vitesse.</p>",
+      "<NewsletterForm client:visible />",
+    ].join("\n"),
+    filename: "pages/index.bangala",
+    lang: "bangala",
+  },
+  {
+    tag: "Contenu",
+    title: "Blogs et contenu statique",
+    desc: "Le HTML est rendu côté serveur, point. Pas de framework, pas de re-rendu, pas d'hydration walk. Les Core Web Vitals s'en remercient.",
+    code: [
+      "---",
+      "const posts = await fetchPosts()",
+      "---",
+      "{#each posts as p}",
+      "  <article><a href={p.url}>{p.title}</a></article>",
+      "{/each}",
+    ].join("\n"),
+    filename: "pages/blog.bangala",
+    lang: "bangala",
+  },
+  {
+    tag: "Mobile & marchés émergents",
+    title: "Projets où chaque kB compte",
+    desc: "E-commerce sur mobile, 3G, Android entry-level. Quand le budget JS est de 50 kB, on ne peut pas se permettre un runtime de 280 kB. bangala est conçu pour ces contraintes.",
+    code: [
+      "<Product data={product} />",
+      "<AddToCart productId={product.id} client:visible />",
+    ].join("\n"),
+    filename: "pages/produit.bangala",
+    lang: "bangala",
+  },
+]
+
+const winsNext = [
+  {
+    tag: "Apps riches",
+    title: "Dashboards et apps très interactives",
+    desc: "Quand 80 % de la page est interactive — data tables, charts, drag & drop, formulaires complexes — l'hydration complète n'est pas un défaut, c'est exactement ce dont vous avez besoin. L'écosystème React mature livre ici.",
+    code: [
+      "\"use client\"",
+      "import { DataTable } from \"@/components/data-table\"",
+      "",
+      "export default function Dashboard({ rows }) {",
+      "  return <DataTable rows={rows} sortable filterable />",
+      "}",
+    ].join("\n"),
+    filename: "app/dashboard/page.tsx",
+    lang: "tsx",
+  },
+  {
+    tag: "Backend intégré",
+    title: "Auth, middleware, ISR, API routes",
+    desc: "Next.js livre un backend complet : middleware Edge, Route Handlers, revalidate, next/image, next-auth, etc. Pour une app SaaS authentifiée, vous évitez de réinventer six choses. bangala v0.4 ne couvre rien de cela.",
+    code: [
+      "// middleware.ts",
+      "import { NextResponse } from \"next/server\"",
+      "",
+      "export function middleware(req) {",
+      "  if (!req.cookies.get(\"session\")) {",
+      "    return NextResponse.redirect(new URL(\"/login\", req.url))",
+      "  }",
+      "}",
+    ].join("\n"),
+    filename: "middleware.ts",
+    lang: "ts",
+  },
+  {
+    tag: "Écosystème React",
+    title: "Équipes 100 % React, plateforme Vercel",
+    desc: "Si votre équipe vit dans React, que vous utilisez Vercel comme plateforme, que vos libs (TanStack, shadcn/ui, etc.) sont React-only, bangala vous coûtera plus qu'il ne vous rapporte. Restez sur Next.js — c'est un excellent choix.",
+    code: [
+      "import { Button } from \"@/components/ui/button\"",
+      "import { useQuery } from \"@tanstack/react-query\"",
+      "",
+      "// L'écosystème React fonctionne tel quel.",
+    ].join("\n"),
+    filename: "app/page.tsx",
+    lang: "tsx",
+  },
+]
+---
+<Layout
+  title="bangala.js vs Next.js — Quand choisir lequel | bangala.js"
+  description="Comparaison honnête entre bangala.js et Next.js. Islands Architecture vs SSR + hydratation complète. Quand chacun gagne, mesures réelles, philosophie."
+  path="/vs/nextjs"
+>
+  <section class="vs-hero">
+    <p class="section-label">Comparaison</p>
+    <h1>bangala.js vs Next.js</h1>
+    <p class="vs-subtitle">
+      bangala.js est un framework HTML-first basé sur l'Islands Architecture : zéro JS par défaut, vous opt-in à l'hydratation. Next.js est un framework React full-stack : tout est un composant React, le runtime accompagne chaque page.
+    </p>
+
+    <div class="vs-tldr">
+      <div class="vs-tldr-col vs-tldr-bangala">
+        <div class="vs-tldr-tag">Choisissez bangala si…</div>
+        <ul>
+          <li>Vous construisez un site marketing, des docs, un blog, un site de contenu.</li>
+          <li>Vous voulez livrer ~0 kB de JS sur des pages statiques.</li>
+          <li>Vous visez du mobile, des marchés émergents, des appareils contraints.</li>
+          <li>Vous aimez écrire du HTML enrichi plutôt que du JSX.</li>
+        </ul>
+      </div>
+      <div class="vs-tldr-col vs-tldr-next">
+        <div class="vs-tldr-tag">Choisissez Next.js si…</div>
+        <ul>
+          <li>Vous construisez un dashboard, un SaaS, une app riche en interactions.</li>
+          <li>Vous avez besoin d'API routes, middleware Edge, ISR, ou next/image.</li>
+          <li>Votre équipe vit dans l'écosystème React (TanStack, shadcn, react-hook-form…).</li>
+          <li>Vous voulez la maturité d'un framework backé par Vercel.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="vs-section">
+    <p class="section-label">À 30 secondes</p>
+    <h2 class="section-title">Le tableau côte à côte</h2>
+    <p class="section-sub">Référence : Next.js App Router (≥ 13.4). Soyez honnête avec vous-même : bangala ne gagne pas chaque ligne.</p>
+
+    <div class="vs-table-wrap">
+      <table class="vs-table">
+        <thead>
+          <tr>
+            <th class="vs-th-feature">Fonctionnalité</th>
+            <th class="col-bangala">bangala.js v0.4</th>
+            <th class="col-nextjs">Next.js (App Router)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each rows as row}
+            <tr>
+              <td class="vs-td-feature">{row.feature}</td>
+              <td class="vs-td-bangala">
+                <span class="vs-mark vs-mark-{row.bangala.mark}">{row.bangala.mark}</span>
+                <span class="vs-cell-text">{row.bangala.text}</span>
+              </td>
+              <td class="vs-td-nextjs">
+                <span class="vs-mark vs-mark-{row.nextjs.mark}">{row.nextjs.mark}</span>
+                <span class="vs-cell-text">{row.nextjs.text}</span>
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    <p class="vs-table-legend">
+      <span class="vs-mark vs-mark-✓">✓</span> supporté nativement
+      &nbsp;·&nbsp;
+      <span class="vs-mark vs-mark-△">△</span> partiel ou avec compromis
+      &nbsp;·&nbsp;
+      <span class="vs-mark vs-mark-✕">✕</span> non supporté
+    </p>
+  </section>
+
+  <section class="vs-section">
+    <p class="section-label">Quand bangala gagne</p>
+    <h2 class="section-title">Trois cas où bangala est clairement le bon choix</h2>
+    <div class="vs-cards-grid">
+      {#each winsBangala as item}
+        <div class="vs-card vs-card-bangala">
+          <div class="vs-card-tag">{item.tag}</div>
+          <h3 class="vs-card-title">{item.title}</h3>
+          <p class="vs-card-desc">{item.desc}</p>
+          <CodeBlock code={item.code} filename={item.filename} lang={item.lang}/>
+        </div>
+      {/each}
+    </div>
+  </section>
+
+  <section class="vs-section">
+    <p class="section-label">Quand Next.js gagne</p>
+    <h2 class="section-title">Trois cas où Next.js est clairement le bon choix</h2>
+    <p class="section-sub">Cette section existe parce qu'une comparaison honnête doit pouvoir dire « l'autre outil est meilleur ici ». Si bangala est un mauvais choix pour votre projet, il vaut mieux le savoir tout de suite.</p>
+    <div class="vs-cards-grid">
+      {#each winsNext as item}
+        <div class="vs-card vs-card-next">
+          <div class="vs-card-tag">{item.tag}</div>
+          <h3 class="vs-card-title">{item.title}</h3>
+          <p class="vs-card-desc">{item.desc}</p>
+          <CodeBlock code={item.code} filename={item.filename} lang={item.lang}/>
+        </div>
+      {/each}
+    </div>
+  </section>
+
+  <section class="vs-section">
+    <p class="section-label">Philosophie</p>
+    <h2 class="section-title">Deux positionnements, pas un meilleur outil</h2>
+    <p class="vs-philo">
+      bangala.js suit la philosophie <strong>« HTML-first, JS seulement quand vous le réclamez »</strong>. Le HTML est la cible, le JavaScript est l'exception. Next.js suit la philosophie <strong>« tout est React, on optimise depuis là »</strong>. Les Server Components, le streaming et les Client Components sont autant d'outils pour minimiser le coût d'une approche full-React. Ce sont deux choix de positionnement différents, pas deux niveaux de qualité. Si votre produit ressemble à un site, bangala part avec une longueur d'avance. Si votre produit ressemble à une application, c'est l'inverse.
+    </p>
+  </section>
+
+  <section class="vs-section">
+    <p class="section-label">Code côte à côte</p>
+    <h2 class="section-title">Trois exemples concrets</h2>
+
+    <h3 class="vs-h3">Page statique avec données serveur</h3>
+    <div class="vs-code-pair">
+      <div class="vs-code-col">
+        <div class="vs-code-label">bangala.js</div>
+        <CodeBlock code={staticBangalaCode} filename="pages/blog.bangala" lang="bangala"/>
+      </div>
+      <div class="vs-code-col">
+        <div class="vs-code-label">Next.js</div>
+        <CodeBlock code={staticNextCode} filename="app/blog/page.tsx" lang="tsx"/>
+      </div>
+    </div>
+
+    <h3 class="vs-h3">Composant interactif (île vs Client Component)</h3>
+    <div class="vs-code-pair">
+      <div class="vs-code-col">
+        <div class="vs-code-label">bangala.js</div>
+        <CodeBlock code={islandBangalaCode} filename="pages/index.bangala" lang="bangala"/>
+      </div>
+      <div class="vs-code-col">
+        <div class="vs-code-label">Next.js</div>
+        <CodeBlock code={islandNextCode} filename="app/page.tsx" lang="tsx"/>
+      </div>
+    </div>
+
+    <h3 class="vs-h3">Server-side data fetching</h3>
+    <div class="vs-code-pair">
+      <div class="vs-code-col">
+        <div class="vs-code-label">bangala.js</div>
+        <CodeBlock code={dataBangalaCode} filename="pages/users/[id].bangala" lang="bangala"/>
+      </div>
+      <div class="vs-code-col">
+        <div class="vs-code-label">Next.js</div>
+        <CodeBlock code={dataNextCode} filename="app/users/[id]/page.tsx" lang="tsx"/>
+      </div>
+    </div>
+  </section>
+
+  <section class="vs-section vs-bench-cta">
+    <p class="section-label">Méthodologie</p>
+    <h2 class="section-title">Pas de chiffres sans méthode</h2>
+    <p class="vs-philo">
+      Une page de blog identique doit être buildée avec bangala, Next.js et un troisième framework, puis mesurée de façon déterministe : taille du HTML rendu, JS shippé après tree-shaking, JS exécuté à l'hydratation. Aucun chiffre ne sera affiché ici tant que la suite de benchmark publique n'est pas reproductible.
+    </p>
+  </section>
+
+  <section class="vs-section">
+    <p class="section-label">Migration & coexistence</p>
+    <h2 class="section-title">bangala ne veut pas remplacer Next.js</h2>
+    <p class="vs-philo">
+      bangala.js n'a pas pour vocation de remplacer Next.js sur les apps SaaS complexes. Les deux outils peuvent — et devraient — coexister : <strong>bangala pour votre site marketing, votre blog et vos docs</strong> ; <strong>Next.js pour votre app authentifiée</strong>. Ils tournent sur des sous-domaines différents, partagent un design system, et personne ne perd. C'est même probablement la configuration la plus rationnelle pour la plupart des SaaS.
+    </p>
+  </section>
+
+  <section class="cta-section">
+    <div class="cta-glow"></div>
+    <p class="section-label">Prêt à essayer ?</p>
+    <h2>Convaincu ? Ou pas encore ?</h2>
+    <p>Installez bangala en une commande, ou lisez la doc d'abord. Aucun lock-in, aucune dépendance lourde.</p>
+    <div class="cta-actions">
+      <a href="/docs/installation" class="btn-primary">Installer bangala</a>
+      <a href="/docs" class="btn-secondary">Lire la doc</a>
+    </div>
+    <div class="install-command">npm install bangala</div>
+  </section>
+</Layout>

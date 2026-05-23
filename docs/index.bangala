@@ -1,7 +1,7 @@
 ---
-import Layout from "./components/Layout.bangala"
-import CodeBlock from "./components/CodeBlock.bangala"
-import LiveDemo from "./components/LiveDemo.bangala"
+import Layout from "./_components/Layout.bangala"
+import CodeBlock from "./_components/CodeBlock.bangala"
+import LiveDemo from "./_components/LiveDemo.bangala"
 
 const DASH = "-".repeat(3)
 const heroSource = [
