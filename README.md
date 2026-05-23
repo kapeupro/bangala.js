@@ -4,81 +4,235 @@
 
 # bangala.js
 
-### The full-stack framework that doesn't make you pay for JavaScript you don't use.
+### The full-stack framework that ships minimal JavaScript.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Status: Design Phase](https://img.shields.io/badge/status-design%20phase-orange.svg)](./docs/superpowers/specs)
+[![npm](https://img.shields.io/badge/npm-v0.1.0-blue.svg)](https://www.npmjs.com/package/bangala)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 </div>
 
 ---
 
-> ⚠️ **Early development.** bangala.js is in its design phase. There is no
-> usable release yet — what lives here today is the architecture and the spec
-> of the first sub-project. Follow along, open issues, and shape the framework
-> while it's still clay. The roadmap is below.
-
----
-
 ## Why bangala.js?
 
-Your visitors download hundreds of kilobytes of JavaScript today just to render
-text. bangala.js flips the default: **your pages are HTML. JavaScript only ships
-where you explicitly ask for it.**
+Most frameworks ship a runtime to the browser even when the page is plain
+content. bangala.js inverts the default: your pages are HTML, and JavaScript
+only travels to the client where you explicitly ask for it.
 
-- 🪨 **Zero JS by default** — a component renders on the server and sends
-  *nothing* to the browser. No runtime, no hydration, no bundle. A content page
-  weighs what it displays.
-- 🏝️ **Islands, not an ocean** — need interactivity? Mark a component with
-  `client:load` and only that component becomes an interactive island, loaded
-  independently. The rest of the page stays inert, instant HTML.
-- 📄 **The `.bangala` format** — HTML enriched with a server frontmatter, `{}`
-  expressions, and `{#if}` / `{#each}` blocks. You write pages, not component
-  trees.
-- ⚡ **Compiled, not interpreted** — every `.bangala` file compiles to a plain
-  JavaScript module. Server rendering is pure string concatenation — the
-  fastest SSR operation there is.
+- **HTML-first.** A `.bangala` file is HTML enriched with a server frontmatter,
+  `{expr}` interpolation, and `{#if}` / `{#each}` blocks. The compiler emits an
+  ESM module whose `render()` is pure string concatenation — the fastest SSR
+  primitive there is.
+- **Framework-agnostic islands.** Interactive components are isolated islands.
+  Each island is just a module that exports `mount(el, props, ctx)`. Use
+  vanilla DOM, Preact, Lit, htmx, or a web component — bangala does not impose
+  a UI library.
+- **Near-zero JS by default.** A static page ships zero framework bytes. Only
+  islands fetch their own module, on demand, with the strategy you pick
+  (`load`, `idle`, or `visible`).
 
-## A taste
+## Status
+
+v0.1.0 is the first public release. It ships **sub-project 1** (the `.bangala`
+compiler and server runtime) and **sub-project 2** (the client islands
+runtime). File-based routing, the dev server + build pipeline, and the CLI are
+the next three sub-projects on the roadmap and are not in this release. Design
+specs live under [`docs/superpowers/specs/`](./docs/superpowers/specs).
+
+## Install
+
+```bash
+npm install bangala
+```
+
+Requires Node.js 22 or newer.
+
+## Quickstart
+
+**1. Write a `.bangala` page.** `pages/index.bangala`:
 
 ```bangala
 ---
-const posts = await db.posts.recent()
+import Counter from "./Counter.bangala"
+const { user } = props
 ---
-<h1>The blog</h1>
-
-{#each posts as post}
-  <article>{post.title}</article>
-{/each}
-
-<Newsletter client:load />   <!-- the only piece of JS on the page -->
+<h1>Hello {user.name}</h1>
+<Counter start={10} client:load />
 ```
 
-> **Next.js ships the framework. bangala.js ships the page.**
+`pages/Counter.bangala`:
+
+```bangala
+---
+const { start } = props
+---
+<button>Counter: {start}</button>
+```
+
+**2. Compile on the server.** `compile()` takes a source string and returns the
+generated ESM module text plus the island manifest:
+
+```ts
+import { compile } from "bangala";
+
+const source = await fs.readFile("pages/index.bangala", "utf8");
+const result = compile(source, { filename: "pages/index.bangala" });
+
+// result.code         — the ESM module source (string)
+// result.islands      — [{ componentPath, strategy }, ...]
+// result.dependencies — paths of imported .bangala files (for watch mode)
+```
+
+**3. Execute the compiled module.** It exports `render(props)` returning a
+Promise of HTML. How you transpile and import the emitted code is your call
+(esbuild, tsx, or sub-project 4 once it lands). Once you have the module:
+
+```ts
+const html = await page.render({ user: { name: "Ada" } });
+// <h1>Hello Ada</h1>
+// <bangala-island data-entry="./Counter" data-props="{&quot;start&quot;:10}"
+//                 data-strategy="load"><button>Counter: 10</button></bangala-island>
+```
+
+**4. Wire the client runtime in the page HTML.** The runtime is published as
+`bangala/client/auto`. In v0.1.0 the bundling of that entry to a browser
+script is your responsibility (sub-project 4 will automate it):
+
+```html
+<script type="module" src="/bangala-client.js"></script>
+```
+
+Or call `hydrate()` yourself for fine-grained control:
+
+```ts
+import { hydrate } from "bangala/client";
+
+hydrate(document, {
+  onError: (error) => reportToMonitoring(error),
+});
+```
+
+## API reference
+
+### `compile(source, options)`
+
+Compiles a `.bangala` source string into an ESM module.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `source` | `string` | The `.bangala` source. |
+| `options.filename` | `string` | File path, used in error messages. |
+
+Returns `CompileResult`:
+
+```ts
+interface CompileResult {
+  code: string;             // generated ESM module source
+  islands: IslandRef[];     // islands found in this file
+  dependencies: string[];   // absolute/relative paths of imported .bangala files
+}
+
+interface IslandRef {
+  componentPath: string;
+  strategy: "client:load" | "client:idle" | "client:visible";
+}
+```
+
+The compiled module exports `render(props): Promise<string>`.
+
+### `hydrate(root?, options?)`
+
+Scans `root` (default: `document`) for `<bangala-island>` markers and hydrates
+each one according to its `data-strategy`. The call is idempotent — already
+hydrated markers are skipped.
+
+```ts
+interface HydrateOptions {
+  onError?: (error: HydrationError) => void;
+}
+
+interface HydrationError {
+  el: HTMLElement;
+  code: ErrorCode;
+  entry?: string;
+  cause?: unknown;
+}
+```
+
+Every error also dispatches a bubbling `bangala:island-error` `CustomEvent`
+on the affected `<bangala-island>` element, whose `detail` matches the
+`HydrationError` passed to `onError`. A throw from `onError` is swallowed so it
+cannot break the rest of the page.
+
+### Island module contract
+
+An island is an ESM module that exports an async `mount` function:
+
+```ts
+export async function mount(
+  el: HTMLElement,
+  props: Record<string, unknown>,
+  ctx: { strategy: "load" | "idle" | "visible"; entry: string },
+): Promise<void> {
+  // `el` still contains the SSR HTML — read it, augment it, or replace it.
+  el.querySelector("button")!.addEventListener("click", () => {
+    // ...
+  });
+}
+```
+
+The runtime guarantees that `props` has been parsed from `data-props` before
+`mount` is called. The return value is currently ignored; a cleanup function
+return is reserved for a future unmount/HMR signal.
+
+## Hydration strategies
+
+| Directive | When it hydrates |
+|---|---|
+| `client:load` | Immediately, in the same tick as the scan. |
+| `client:idle` | At `requestIdleCallback` with a 2s timeout. Safari falls back to `setTimeout(fn, 1)`. |
+| `client:visible` | When the element enters the viewport, with a 200px `rootMargin`. Falls back to immediate hydration when `IntersectionObserver` is unavailable. |
+
+## Error codes
+
+Each error sets `data-hydrated="error"` and `data-hydration-error="<code>"` on
+the `<bangala-island>` element, logs to `console.error`, invokes `onError`,
+then dispatches `bangala:island-error`.
+
+| Code | When it fires |
+|---|---|
+| `missing-entry` | The `<bangala-island>` element has no `data-entry` (or it is empty). |
+| `invalid-props` | `JSON.parse(data-props)` threw. (A missing `data-props` defaults to `{}` and is not an error.) |
+| `unknown-strategy` | `data-strategy` is present but not one of `load`, `idle`, `visible`. |
+| `import-failed` | `import(data-entry)` rejected (404, syntax error, network failure). |
+| `missing-mount` | The imported module did not expose a callable `mount` export. |
+| `mount-failed` | `mount(el, props, ctx)` threw or returned a rejected promise. |
+
+The string codes are stable across versions; the human messages logged
+alongside them are free to evolve.
 
 ## Roadmap
 
-bangala.js is built as five focused sub-projects, each with its own design spec
-and implementation cycle.
+bangala.js is structured as five sub-projects, each with its own spec/plan
+cycle. v0.1.0 delivers the first two; the remaining three are queued:
 
 | # | Sub-project | Status |
 |---|---|---|
-| 1 | **`.bangala` compiler + server renderer** | 🎯 Design done — [spec](./docs/superpowers/specs/2026-05-22-bangala-compiler-design.md) |
-| 2 | Client-side islands runtime | 📋 Planned |
-| 3 | File-based routing | 📋 Planned |
-| 4 | Dev server + build (Vite) | 📋 Planned |
-| 5 | CLI + scaffolding + deploy adapters | 📋 Planned |
+| 1 | `.bangala` compiler + server runtime | Shipped in v0.1.0 |
+| 2 | Client islands runtime | Shipped in v0.1.0 |
+| 3 | File-based routing | Planned |
+| 4 | Dev server + build (Vite) | Planned |
+| 5 | CLI + scaffolding + deploy adapters | Planned |
 
-The current design document lives in
-[`docs/superpowers/specs/`](./docs/superpowers/specs).
+Designs live in [`docs/superpowers/specs/`](./docs/superpowers/specs).
 
 ## Contributing
 
-bangala.js is being built in the open and contributions are welcome — code,
-design feedback, issues, docs. Start with [CONTRIBUTING.md](./CONTRIBUTING.md)
-and our [Code of Conduct](./CODE_OF_CONDUCT.md).
+bangala.js is being built in the open. See
+[CONTRIBUTING.md](./CONTRIBUTING.md) and the
+[Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License
 
-[MIT](./LICENSE) © bangala.js contributors
+[MIT](./LICENSE) (c) bangala.js contributors
