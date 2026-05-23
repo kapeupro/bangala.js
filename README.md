@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./docs/logo.svg" width="96" alt="bangala.js logo" />
+
 # bangala.js
 
 ### The full-stack framework that doesn't make you pay for JavaScript you don't use.
