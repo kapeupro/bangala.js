@@ -481,7 +481,11 @@ function templateFiles(name: string, version: string): { path: string; contents:
     },
     {
       path: "public/favicon.svg",
-      contents: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#f97316"/><text x="16" y="22" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="800" text-anchor="middle" fill="#fff">b</text></svg>\n`,
+      contents: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 110" width="80" height="110" fill="none" role="img" aria-label="bangala.js"><ellipse cx="26" cy="104" rx="16" ry="8" fill="none" stroke="#f97316" stroke-width="3" stroke-opacity="0.6"/><ellipse cx="54" cy="104" rx="16" ry="8" fill="none" stroke="#f97316" stroke-width="3" stroke-opacity="0.6"/><rect x="18" y="52" width="44" height="52" rx="3" fill="none" stroke="#f97316" stroke-width="3"/><rect x="31" y="76" width="18" height="28" rx="3" fill="#f97316" fill-opacity="0.25" stroke="#f97316" stroke-width="2"/><path d="M12 54 C12 54 12 8 40 2 C68 8 68 54 68 54 Z" fill="none" stroke="#f97316" stroke-width="3"/><path d="M16 54 Q40 50 64 54" stroke="#f97316" stroke-width="2.5" fill="none"/><rect x="50" y="2" width="9" height="15" rx="2" fill="none" stroke="#f97316" stroke-width="2.5"/><rect x="48" y="0" width="13" height="5" rx="2" fill="#f97316" stroke="#f97316" stroke-width="2"/></svg>\n`,
+    },
+    {
+      path: "public/logo.svg",
+      contents: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 110" width="80" height="110" fill="none" role="img" aria-label="bangala.js logo"><ellipse cx="26" cy="104" rx="16" ry="8" fill="none" stroke="#f97316" stroke-width="1.5" stroke-opacity="0.5"/><ellipse cx="54" cy="104" rx="16" ry="8" fill="none" stroke="#f97316" stroke-width="1.5" stroke-opacity="0.5"/><rect x="18" y="52" width="44" height="52" rx="3" fill="none" stroke="#f97316" stroke-width="1.5"/><rect x="31" y="76" width="18" height="28" rx="3" fill="#f97316" fill-opacity="0.15" stroke="#f97316" stroke-width="1.2"/><path d="M12 54 C12 54 12 8 40 2 C68 8 68 54 68 54 Z" fill="none" stroke="#f97316" stroke-width="1.5"/><path d="M16 54 Q40 50 64 54" stroke="#f97316" stroke-width="1.5" fill="none"/><rect x="50" y="2" width="9" height="15" rx="2" fill="none" stroke="#f97316" stroke-width="1.3"/><rect x="48" y="0" width="13" height="5" rx="2" fill="#f97316" fill-opacity="0.4" stroke="#f97316" stroke-width="1.2"/></svg>\n`,
     },
     {
       path: "public/styles.css",
