@@ -69,24 +69,44 @@ import Layout from "../_components/Layout.bangala"
         </div>
       </div>
       <p>For a catch-all segment (<code>[...parts]</code>), the param is an array of decoded path segments. <code>/docs/getting/started</code> gives you <code>params.parts === ["getting", "started"]</code>.</p>
-
-      <h2>Nested routes</h2>
-      <p>Folders nest naturally. <code>pages/blog/2026/recap.bangala</code> serves <code>/blog/2026/recap</code>. There is no special &ldquo;layout&rdquo; convention in v0.4.0 &mdash; if you want a shared shell, import a layout component in the frontmatter the same way the docs site does:</p>
+      <p>During a static build, dynamic routes opt into prerendering with <code>getStaticPaths()</code>. Export it from the page frontmatter and return the concrete params to build:</p>
       <div class="hero-code" style="margin: 1.5rem 0 2rem;">
         <div class="code-header">
           <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">pages/blog/index.bangala</span>
+          <span class="code-fname">pages/blog/[slug].bangala</span>
         </div>
         <div class="code-body">
 <span class="ln">1</span><span class="ctag">---</span>
-<span class="ln">2</span><span class="kw">import</span> Layout <span class="kw">from</span> <span class="str">"../../components/Layout.bangala"</span>
-<span class="ln">3</span><span class="ctag">---</span>
-<span class="ln">4</span><span class="ctag">&lt;Layout</span> title=<span class="str">"Blog"</span><span class="ctag">&gt;</span>
-<span class="ln">5</span>  <span class="ctag">&lt;h1&gt;</span>Articles<span class="ctag">&lt;/h1&gt;</span>
-<span class="ln">6</span><span class="ctag">&lt;/Layout&gt;</span>
+<span class="ln">2</span><span class="kw">export</span> <span class="kw">async</span> <span class="kw">function</span> getStaticPaths() &#123;
+<span class="ln">3</span>  <span class="kw">return</span> [
+<span class="ln">4</span>    &#123; params: &#123; slug: <span class="str">"hello-world"</span> &#125; &#125;,
+<span class="ln">5</span>    &#123; params: &#123; slug: <span class="str">"release-notes"</span> &#125; &#125;,
+<span class="ln">6</span>  ]
+<span class="ln">7</span>&#125;
+<span class="ln">8</span><span class="ctag">---</span>
+<span class="ln">9</span><span class="ctag">&lt;h1&gt;</span>&#123;props.params.slug&#125;<span class="ctag">&lt;/h1&gt;</span>
         </div>
       </div>
-      <p>Nested layouts (Next.js-style <code>layout.bangala</code>) are not part of v0.4.0 &mdash; explicit component imports keep things obvious until the API stabilises.</p>
+
+      <h2>Nested routes</h2>
+      <p>Folders nest naturally. <code>pages/blog/2026/recap.bangala</code> serves <code>/blog/2026/recap</code>. Shared shells use the reserved <code>_layout.bangala</code> convention: a layout file applies to every page below the folder where it lives.</p>
+      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
+        <div class="code-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-fname">pages/_layout.bangala</span>
+        </div>
+        <div class="code-body">
+<span class="ln">1</span><span class="ctag">---</span>
+<span class="ln">2</span><span class="kw">const</span> &#123; title = <span class="str">"bangala"</span> &#125; = props
+<span class="ln">3</span><span class="ctag">---</span>
+<span class="ln">4</span><span class="ctag">&lt;!DOCTYPE</span> html<span class="ctag">&gt;</span>
+<span class="ln">5</span><span class="ctag">&lt;html&gt;</span>
+<span class="ln">6</span>  <span class="ctag">&lt;head&gt;&lt;title&gt;</span>&#123;title&#125;<span class="ctag">&lt;/title&gt;&lt;/head&gt;</span>
+<span class="ln">7</span>  <span class="ctag">&lt;body&gt;&lt;slot/&gt;&lt;/body&gt;</span>
+<span class="ln">8</span><span class="ctag">&lt;/html&gt;</span>
+        </div>
+      </div>
+      <p>Nested layouts compose from the outside in. For example, <code>pages/_layout.bangala</code> wraps the whole site, and <code>pages/docs/_layout.bangala</code> wraps only <code>/docs/**</code> pages inside the root shell.</p>
 
       <h2>Specificity &amp; matching order</h2>
       <p>When more than one route could match a URL, the router picks the most specific one. Static segments beat dynamic segments, dynamic segments beat catch-alls, and longer paths beat shorter ones. Concretely:</p>
@@ -123,6 +143,7 @@ import Layout from "../_components/Layout.bangala"
         <li><span class="check">&middot;</span> <code>file</code> &mdash; the absolute path of the source file.</li>
         <li><span class="check">&middot;</span> <code>path</code> &mdash; the public route pattern (<code>/</code>, <code>/blog/:slug</code>, <code>/docs/*parts</code>).</li>
         <li><span class="check">&middot;</span> <code>segments</code> &mdash; the parsed segments, each either static, dynamic, or catch-all.</li>
+        <li><span class="check">&middot;</span> <code>layouts</code> &mdash; absolute paths of the layouts attached to the route, outermost first.</li>
         <li><span class="check">&middot;</span> <code>score</code> &mdash; the specificity score. Higher scores match first.</li>
       </ul>
       <p>Routes returned from <code>discoverRoutes()</code> are already sorted so you can iterate them top-to-bottom in your own matcher, or hand them straight to <code>matchRoute()</code>.</p>

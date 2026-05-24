@@ -50,7 +50,8 @@
 </section>
 
 <script type="module">
-import "bangala/client/auto";
+// The bangala/client/auto runtime is injected by the build (assets/bangala-client.js),
+// so we don't import it here — that would be a bare specifier the browser can't resolve.
 
 // Update each demo card's status badge as its island hydrates or errors.
 function watchIsland(el) {

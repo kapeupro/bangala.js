@@ -2,6 +2,21 @@
 
 All notable changes to bangala.js are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0] - 2026-05-24
+
+### Added
+
+- **Routed layouts.** `_layout.bangala` files are discovered by the router, attached to descendant routes, and rendered outermost-first by the Vite dev server and static build.
+- **Dynamic static generation.** Dynamic routes can export `getStaticPaths()` to prerender concrete paths during `buildBangala()` / `bangala build`.
+- **Browser e2e coverage.** Added Playwright smoke, hydration, playground, and responsive checks, wired into CI after the unit/typecheck/build matrix.
+
+### Fixed
+
+- Frontmatter parsing now ignores `---` fences inside JavaScript strings, template literals, and comments.
+- Exported frontmatter declarations, including `export async function getStaticPaths()`, are emitted at module scope instead of inside `render()`.
+- Static HTML attributes and generated `data-props` are escaped correctly before they are embedded in rendered HTML.
+- The docs live demo no longer imports the bare specifier `bangala/client/auto` from inline browser code; the build-injected client runtime handles hydration.
+
 ## [0.5.0] - 2026-05-23
 
 ### Added

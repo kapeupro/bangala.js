@@ -131,6 +131,27 @@ describe("createBangalaDevServer", () => {
       await vite.close();
     }
   });
+
+  it("renders routes through discovered layouts without escaping child HTML", async () => {
+    const root = tmpRoot();
+    write(root, "pages/_layout.bangala", "<html><body><main><slot/></main></body></html>");
+    write(root, "pages/about.bangala", "<h1>About</h1><p>Ready</p>");
+
+    const vite = await createBangalaDevServer({
+      root,
+      vite: { server: { middlewareMode: true } },
+    });
+
+    try {
+      const response = await renderMiddleware(vite, "/about");
+
+      expect(response.status).toBe(200);
+      expect(response.html).toContain("<main><h1>About</h1><p>Ready</p></main>");
+      expect(response.html).not.toContain("&lt;h1");
+    } finally {
+      await vite.close();
+    }
+  });
 });
 
 describe("buildBangala", () => {
@@ -155,5 +176,57 @@ describe("buildBangala", () => {
       "<h1>first-post</h1>",
     );
     await expect(stat(join(root, "public/assets/bangala-client.js"))).resolves.toBeTruthy();
+  });
+
+  it("prerenders nested layouts outermost first", async () => {
+    const root = tmpRoot();
+    write(root, "pages/_layout.bangala", "<html><body><slot/></body></html>");
+    write(root, "pages/docs/_layout.bangala", "<section data-docs><slot/></section>");
+    write(root, "pages/docs/index.bangala", "<h1>Docs</h1>");
+
+    const result = await buildBangala({ root, outDir: "out", client: false });
+
+    expect(result.pages.map((page) => page.pathname)).toEqual(["/docs"]);
+    expect(await readFile(join(root, "out/docs/index.html"), "utf8")).toBe(
+      '<html><body><section data-docs=""><h1>Docs</h1></section></body></html>',
+    );
+  });
+
+  it("prerenders dynamic routes via getStaticPaths()", async () => {
+    const root = tmpRoot();
+    write(root, "pages/index.bangala", "<h1>Home</h1>");
+    write(
+      root,
+      "pages/posts/[slug].bangala",
+      [
+        "---",
+        "export async function getStaticPaths() {",
+        '  return [{ params: { slug: "hello" } }, { params: { slug: "world" } }]',
+        "}",
+        "---",
+        "<article>{props.params.slug}</article>",
+      ].join("\n"),
+    );
+
+    const result = await buildBangala({ root, outDir: "out" });
+
+    const pathnames = result.pages.map((p) => p.pathname).sort();
+    expect(pathnames).toEqual(["/", "/posts/hello", "/posts/world"]);
+    expect(await readFile(join(root, "out/posts/hello/index.html"), "utf8")).toContain(
+      "<article>hello</article>",
+    );
+    expect(await readFile(join(root, "out/posts/world/index.html"), "utf8")).toContain(
+      "<article>world</article>",
+    );
+  });
+
+  it("skips dynamic routes that do not export getStaticPaths()", async () => {
+    const root = tmpRoot();
+    write(root, "pages/index.bangala", "<h1>Home</h1>");
+    write(root, "pages/blog/[slug].bangala", "<p>{props.params.slug}</p>");
+
+    const result = await buildBangala({ root, outDir: "out" });
+
+    expect(result.pages.map((p) => p.pathname).sort()).toEqual(["/"]);
   });
 });

@@ -113,7 +113,7 @@ import Layout from "../_components/Layout.bangala"
 <span class="ln">1</span><span class="kw">npx</span> <span class="fn">bangala</span> deploy <span class="str">static</span>
         </div>
       </div>
-      <p>If you want to embed bangala in an existing Node.js server (Express, Hono, Fastify, etc.), call the compiler programmatically: <code>compile()</code> turns a <code>.bangala</code> source into an ESM module, and the generated <code>render(props)</code> returns an HTML string you can pipe straight to the response. Server-side rendering on demand &mdash; without the build step &mdash; is not part of the v0.4.0 adapter surface, but the compiler is a public API you can wire up yourself.</p>
+      <p>If you want to embed bangala in an existing Node.js server (Express, Hono, Fastify, etc.), call the compiler programmatically: <code>compile()</code> turns a <code>.bangala</code> source into an ESM module, and the generated <code>render(props)</code> returns an HTML string you can pipe straight to the response. Server-side rendering on demand &mdash; without the build step &mdash; is not part of the v1.0 adapter surface, but the compiler is a public API you can wire up yourself.</p>
       <p>Routing helpers (<code>discoverRoutes</code>, <code>matchRoute</code>) are also exported from <code>bangala/router</code> so a custom server can resolve URLs the same way the build does.</p>
 
       <h2>GitHub Pages</h2>
@@ -139,7 +139,7 @@ import Layout from "../_components/Layout.bangala"
       <p>The same recipe works for any project: install dependencies, run <code>bangala build</code>, upload the output, deploy. No dedicated adapter is needed because GitHub Pages serves any static directory you hand it.</p>
 
       <h2>Roadmap</h2>
-      <p>Server-side adapters (SSR on Vercel Functions, Cloudflare Workers, Node middleware) are deliberately out of scope for v0.4.0 &mdash; the build is static-first. If you have a use case that needs runtime rendering, file an issue: it&rsquo;s the next major area of the framework to explore.</p>
+      <p>Server-side adapters (SSR on Vercel Functions, Cloudflare Workers, Node middleware) are deliberately out of scope for v1.0 &mdash; the build is static-first. If you have a use case that needs runtime rendering, file an issue: it&rsquo;s the next major area of the framework to explore.</p>
 
       <div class="cta-actions" style="margin-top: 3rem; justify-content: flex-start;">
         <a href="/docs" class="btn-primary">Back to Introduction</a>

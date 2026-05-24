@@ -130,4 +130,54 @@ describe("discoverRoutes", () => {
       join(root, "index.bangala"),
     ]);
   });
+
+  it("excludes _layout.bangala from routes", async () => {
+    const root = tmpRoot();
+    touch(root, "_layout.bangala");
+    touch(root, "index.bangala");
+
+    const routes = await discoverRoutes(root);
+    expect(routes.map((r) => r.path)).toEqual(["/"]);
+  });
+
+  it("attaches the root layout to every route", async () => {
+    const root = tmpRoot();
+    touch(root, "_layout.bangala");
+    touch(root, "index.bangala");
+    touch(root, "about.bangala");
+
+    const routes = await discoverRoutes(root);
+    for (const route of routes) {
+      expect(route.layouts).toEqual([join(root, "_layout.bangala")]);
+    }
+  });
+
+  it("attaches nested layouts outermost first", async () => {
+    const root = tmpRoot();
+    touch(root, "_layout.bangala");
+    touch(root, "index.bangala");
+    touch(root, "docs/_layout.bangala");
+    touch(root, "docs/index.bangala");
+    touch(root, "docs/syntax.bangala");
+
+    const routes = await discoverRoutes(root);
+    const byPath = new Map(routes.map((r) => [r.path, r]));
+
+    expect(byPath.get("/")!.layouts).toEqual([join(root, "_layout.bangala")]);
+    expect(byPath.get("/docs")!.layouts).toEqual([
+      join(root, "_layout.bangala"),
+      join(root, "docs/_layout.bangala"),
+    ]);
+    expect(byPath.get("/docs/syntax")!.layouts).toEqual([
+      join(root, "_layout.bangala"),
+      join(root, "docs/_layout.bangala"),
+    ]);
+  });
+
+  it("gives a route with no layouts an empty array", async () => {
+    const root = tmpRoot();
+    touch(root, "index.bangala");
+    const routes = await discoverRoutes(root);
+    expect(routes[0]!.layouts).toEqual([]);
+  });
 });

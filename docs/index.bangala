@@ -276,9 +276,9 @@ const comparisons = [
     <div class="cta-glow"></div>
     <p class="section-label reveal">Démarrer</p>
     <h2 class="reveal">Prêt à construire<br/><span class="gradient-text">léger&nbsp;?</span></h2>
-    <p class="reveal">Une commande. Le compilateur, le runtime d'îlots, le routeur, les helpers Vite et la CLI <code class="inline-code">v0.4.0</code>.</p>
+    <p class="reveal">Une commande. Le compilateur, le runtime d'îlots, le routeur, les layouts, les helpers Vite et la CLI <code class="inline-code">v1.0.0</code>.</p>
     <div class="cta-actions reveal">
-      <a href="https://www.npmjs.com/package/bangala" class="btn-primary">Installer v0.4.0</a>
+      <a href="https://www.npmjs.com/package/bangala" class="btn-primary">Installer v1.0.0</a>
       <a href="/docs" class="btn-secondary">Lire la doc</a>
     </div>
     <div class="install-command reveal">npm install bangala</div>

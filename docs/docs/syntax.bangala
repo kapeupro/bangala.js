@@ -64,7 +64,7 @@ import Layout from "../_components/Layout.bangala"
         </div>
       </div>
       <p>The braces only delimit the expression boundary &mdash; the contents are passed verbatim to JavaScript, so you can write <code>&#123;a + b&#125;</code>, <code>&#123;user?.name ?? "anon"&#125;</code>, ternaries, function calls, anything. The compiler doesn&rsquo;t parse the JS itself; it only finds the matching closing brace.</p>
-      <p>If you need to render raw HTML, you have to step out of the expression mechanism and write the markup directly in the template body &mdash; there is no <code>&#123;@html ...&#125;</code> equivalent in v0.4.0. This is by design: it keeps every interpolated value escape-safe.</p>
+      <p>If you need to render raw HTML, you have to step out of the expression mechanism and write the markup directly in the template body &mdash; there is no <code>&#123;@html ...&#125;</code> equivalent. This is by design: it keeps every interpolated value escape-safe.</p>
 
       <h2>Conditionals</h2>
       <p>Use <code>&#123;#if condition&#125; ... &#123;/if&#125;</code> for conditional rendering. The optional <code>&#123;:else&#125;</code> branch handles the negative case.</p>
@@ -90,7 +90,7 @@ import Layout from "../_components/Layout.bangala"
 <span class="ln">5</span><span class="ctag">&lt;/ul&gt;</span>
         </div>
       </div>
-      <p>The <code>list</code> part is a JS expression; <code>item</code> is the loop binding. There is no implicit <code>index</code> binding in v0.4.0 &mdash; if you need indices, map your list to <code>[item, index]</code> tuples in the frontmatter.</p>
+      <p>The <code>list</code> part is a JS expression; <code>item</code> is the loop binding. There is no implicit <code>index</code> binding &mdash; if you need indices, map your list to <code>[item, index]</code> tuples in the frontmatter.</p>
 
       <h2>Components</h2>
       <p>A capitalised tag is a component reference. The compiler looks up the matching default import in the frontmatter and calls its <code>render()</code>. Attributes become props; children fill the component&rsquo;s <code>&lt;slot/&gt;</code>.</p>
@@ -104,7 +104,7 @@ import Layout from "../_components/Layout.bangala"
 <span class="ln">6</span><span class="ctag">&lt;/Card&gt;</span>
         </div>
       </div>
-      <p>Static attributes (<code>title="Hello"</code>) are passed as strings. Bracketed attributes (<code>highlighted=&#123;true&#125;</code>) are JS expressions. Inside <code>Card.bangala</code>, place a single <code>&lt;slot/&gt;</code> wherever the children should appear. Only one slot per component in v0.4.0.</p>
+      <p>Static attributes (<code>title="Hello"</code>) are passed as strings. Bracketed attributes (<code>highlighted=&#123;true&#125;</code>) are JS expressions. Inside <code>Card.bangala</code>, place a single <code>&lt;slot/&gt;</code> wherever the children should appear. bangala supports one default slot per component.</p>
 
       <h2>Client directives</h2>
       <p>Add <code>client:load</code>, <code>client:idle</code>, or <code>client:visible</code> to a component to turn it into an <strong>island</strong>. The component is still rendered to HTML on the server; the directive only tells the client runtime when to wake it up.</p>
@@ -117,7 +117,7 @@ import Layout from "../_components/Layout.bangala"
       </div>
       <p>See <a href="/docs/islands">Islands Architecture</a> for the full hydration story and the <code>mount</code> contract each island must implement.</p>
 
-      <h2>What&rsquo;s not supported (v0.4.0)</h2>
+      <h2>What&rsquo;s not supported yet</h2>
       <p>bangala.js is intentionally small. A few things you may expect from other frameworks are not here yet:</p>
       <ul class="compare-list" style="margin-top: 1rem;">
         <li><span class="check">&middot;</span> <strong>JSX</strong>. The whole point is to stay HTML-first; there is no <code>className</code>, no fragment, no JS expression syntax for elements.</li>

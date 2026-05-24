@@ -193,7 +193,7 @@ export async function buildBangala(
 
   try {
     const routes = await discoverRoutes(pagesRoot);
-    const pathnames = pathnamesToPrerender(routes, options.prerender ?? []);
+    const pathnames = await pathnamesToPrerender(server, routes, options.prerender ?? []);
     const pages: BuiltPage[] = [];
 
     for (const pathname of pathnames) {
@@ -222,22 +222,116 @@ async function renderMatchedRoute(
   server: ViteDevServer,
   match: RouteMatch,
 ): Promise<string> {
-  const mod = await server.ssrLoadModule(match.route.file);
-  if (typeof mod.render !== "function") {
-    throw new Error(`Route module '${match.route.file}' does not export render()`);
-  }
-  return String(await mod.render({ params: match.params, url: match.pathname }));
+  const props = { params: match.params, url: match.pathname };
+  const page = await loadRenderable(server, match.route.file);
+  const layouts = await Promise.all(
+    match.route.layouts.map((file) => loadRenderable(server, file)),
+  );
+  return wrapWithLayouts(layouts, page, props);
 }
 
-function pathnamesToPrerender(routes: FileRoute[], extra: string[]): string[] {
+interface Renderable {
+  render: (props: Record<string, unknown>) => string | Promise<string>;
+}
+
+async function loadRenderable(server: ViteDevServer, file: string): Promise<Renderable> {
+  const mod = await server.ssrLoadModule(file);
+  if (typeof (mod as Record<string, unknown>).render !== "function") {
+    throw new Error(`Module '${file}' does not export render()`);
+  }
+  return mod as unknown as Renderable;
+}
+
+/**
+ * Composes a page render with its layout chain. `layouts` is ordered
+ * outermost-first: layouts[0] wraps everything, layouts[last] wraps the page
+ * most tightly. Each layout's `props.children` is the pre-rendered HTML of
+ * the inner content.
+ */
+export async function wrapWithLayouts(
+  layouts: Renderable[],
+  page: Renderable,
+  props: Record<string, unknown>,
+): Promise<string> {
+  let html = String(await page.render(props));
+  for (let i = layouts.length - 1; i >= 0; i--) {
+    html = String(await layouts[i]!.render({ ...props, children: html }));
+  }
+  return html;
+}
+
+interface StaticPathEntry {
+  params?: Record<string, string | string[]>;
+}
+
+/**
+ * Builds the list of pathnames to prerender. Static routes are always
+ * included. Dynamic routes (`[slug]`, `[...rest]`) are included if their
+ * module exports `getStaticPaths()` — its return value is a list of
+ * `{ params }` objects that get substituted into the route's pattern.
+ *
+ * Pages with dynamic segments and no `getStaticPaths` export are silently
+ * skipped: they may exist for dev-server-only or SSR-at-request-time use later,
+ * while today's build remains static-first.
+ */
+async function pathnamesToPrerender(
+  server: ViteDevServer,
+  routes: FileRoute[],
+  extra: string[],
+): Promise<string[]> {
   const out = new Set<string>();
   for (const route of routes) {
-    if (route.segments.every((segment) => segment.type === "static")) {
+    const isStatic = route.segments.every((segment) => segment.type === "static");
+    if (isStatic) {
       out.add(route.path);
+      continue;
+    }
+    const mod = await server.ssrLoadModule(route.file);
+    const getStaticPaths = (mod as { getStaticPaths?: () => unknown }).getStaticPaths;
+    if (typeof getStaticPaths !== "function") continue;
+    const result = await getStaticPaths();
+    if (!Array.isArray(result)) {
+      throw new Error(
+        `getStaticPaths() in '${route.file}' must return an array of { params }`,
+      );
+    }
+    for (const entry of result as StaticPathEntry[]) {
+      const params = entry?.params ?? {};
+      out.add(buildPathnameFromRoute(route, params));
     }
   }
   for (const pathname of extra) out.add(normalizePublicPath(pathname));
   return [...out].sort((a, b) => a.localeCompare(b));
+}
+
+function buildPathnameFromRoute(
+  route: FileRoute,
+  params: Record<string, string | string[]>,
+): string {
+  const parts: string[] = [];
+  for (const seg of route.segments) {
+    if (seg.type === "static") {
+      parts.push(seg.value);
+    } else if (seg.type === "dynamic") {
+      const v = params[seg.name];
+      if (typeof v !== "string") {
+        throw new Error(
+          `getStaticPaths for '${route.file}': param '${seg.name}' must be a string`,
+        );
+      }
+      parts.push(encodeURIComponent(v));
+    } else {
+      // catch-all
+      const v = params[seg.name];
+      if (!Array.isArray(v)) {
+        throw new Error(
+          `getStaticPaths for '${route.file}': catch-all param '${seg.name}' must be a string[]`,
+        );
+      }
+      parts.push(...v.map((s) => encodeURIComponent(s)));
+    }
+  }
+  return parts.length === 0 ? "/" : "/" + parts.join("/");
 }
 
 function outputFileForPathname(outDir: string, pathname: string): string {

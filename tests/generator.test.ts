@@ -33,4 +33,30 @@ describe("generate", () => {
     );
     expect(code).toContain(`await island(Counter, {"start": 1}, "./Counter", "client:load")`);
   });
+
+  it("keeps exported frontmatter declarations at module scope", () => {
+    const code = gen([
+      "---",
+      "export async function getStaticPaths() {",
+      "  return [{ params: { slug: \"hello\" } }]",
+      "}",
+      "const title = \"Post\"",
+      "---",
+      "<h1>{title}</h1>",
+    ].join("\n"));
+
+    expect(code).toContain("export async function getStaticPaths()");
+    expect(code).toContain("async function render(props)");
+    expect(code.indexOf("export async function getStaticPaths()")).toBeLessThan(
+      code.indexOf("async function render(props)"),
+    );
+    expect(code).toContain("  const title = \"Post\"");
+  });
+
+  it("escapes static attribute values for HTML attributes and JS template literals", () => {
+    const code = gen(`<div data-props="{&quot;name&quot;:&quot;Ada&quot;}" data-template="\${x}"></div>`);
+
+    expect(code).toContain('data-props="{&amp;quot;name&amp;quot;:&amp;quot;Ada&amp;quot;}"');
+    expect(code).toContain('data-template="\\${x}"');
+  });
 });

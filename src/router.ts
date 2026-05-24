@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { extname, join, relative } from "node:path";
+import { dirname, extname, join, relative, sep } from "node:path";
 
 export type RouteSegment =
   | { type: "static"; value: string }
@@ -16,6 +16,12 @@ export interface FileRoute {
   segments: RouteSegment[];
   /** Higher scores are more specific and are matched first. */
   score: number;
+  /**
+   * Layout files (absolute paths) to wrap this route with, outermost first.
+   * Each `_layout.bangala` in the route's ancestor directories (from the pages
+   * root down to the route file's directory) is included in order.
+   */
+  layouts: string[];
 }
 
 export interface RouteMatch {
@@ -32,23 +38,32 @@ export interface RouteOptions {
 }
 
 const DEFAULT_EXTENSIONS = [".bangala"] as const;
+const LAYOUT_BASENAME = "_layout";
 
 export async function discoverRoutes(
   root: string,
   options: Omit<RouteOptions, "root"> = {},
 ): Promise<FileRoute[]> {
-  const files = await walk(root, options.extensions ?? DEFAULT_EXTENSIONS);
-  return createRoutes(files, { ...options, root });
+  const extensions = options.extensions ?? DEFAULT_EXTENSIONS;
+  const { files, layouts } = await walk(root, extensions);
+  return createRoutes(files, { ...options, root, extensions, layouts });
 }
 
 export function createRoutes(
   files: Iterable<string>,
-  options: RouteOptions = {},
+  options: RouteOptions & { layouts?: Iterable<string> } = {},
 ): FileRoute[] {
+  const fileList = [...files];
+  const extensions = options.extensions ?? DEFAULT_EXTENSIONS;
+  const layoutSet = new Set(
+    (options.layouts ? [...options.layouts] : findLayouts(fileList, extensions)),
+  );
+
   const routes: FileRoute[] = [];
   const seen = new Map<string, string>();
 
-  for (const file of files) {
+  for (const file of fileList) {
+    if (layoutSet.has(file)) continue;
     const path = routePathFromFile(file, options);
     if (path === null) continue;
     const previous = seen.get(path);
@@ -63,10 +78,74 @@ export function createRoutes(
       path,
       segments,
       score: scoreSegments(segments),
+      layouts: layoutsForFile(file, layoutSet, options.root),
     });
   }
 
   return routes.sort(compareRoutes);
+}
+
+function findLayouts(files: Iterable<string>, extensions: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const file of files) {
+    if (isLayoutFile(file, extensions)) out.push(file);
+  }
+  return out;
+}
+
+function isLayoutFile(file: string, extensions: readonly string[]): boolean {
+  const ext = extensions.find((candidate) => file.endsWith(candidate));
+  if (!ext) return false;
+  const posix = file.replace(/\\/g, "/");
+  const base = posix.slice(posix.lastIndexOf("/") + 1, posix.length - ext.length);
+  return base === LAYOUT_BASENAME;
+}
+
+function layoutsForFile(
+  file: string,
+  layoutSet: Set<string>,
+  root?: string,
+): string[] {
+  if (layoutSet.size === 0) return [];
+  const fileDir = dirname(file);
+  const rootDir = root ? normalizeDir(root) : null;
+
+  const chain: string[] = [];
+  // Walk from file's directory up. We must stop at the route root (inclusive),
+  // never going above it. If no root was given, we collect every ancestor
+  // layout we can find — this is used in unit tests with synthetic file paths.
+  let current = fileDir;
+  // Safety bound: 100 levels is far more than any real project.
+  for (let i = 0; i < 100; i++) {
+    const matches = findLayoutInDir(current, layoutSet);
+    if (matches) chain.push(matches);
+    if (rootDir !== null && normalizeDir(current) === rootDir) break;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+    if (rootDir !== null && !isWithinOrEqual(current, rootDir)) break;
+  }
+
+  // chain is innermost → outermost; reverse to outermost-first.
+  return chain.reverse();
+}
+
+function findLayoutInDir(dir: string, layoutSet: Set<string>): string | null {
+  for (const layout of layoutSet) {
+    if (dirname(layout) === dir) return layout;
+  }
+  return null;
+}
+
+function normalizeDir(dir: string): string {
+  return dir.endsWith(sep) ? dir.slice(0, -1) : dir;
+}
+
+function isWithinOrEqual(candidate: string, root: string): boolean {
+  const c = normalizeDir(candidate);
+  const r = normalizeDir(root);
+  if (c === r) return true;
+  return c.startsWith(`${r}${sep}`) || c.startsWith(`${r}/`);
 }
 
 export function routePathFromFile(
@@ -111,22 +190,37 @@ export function matchRoute(
   return null;
 }
 
-async function walk(root: string, extensions: readonly string[]): Promise<string[]> {
-  const out: string[] = [];
-  const entries = await readdir(root, { withFileTypes: true });
-  entries.sort((a, b) => a.name.localeCompare(b.name));
+async function walk(
+  root: string,
+  extensions: readonly string[],
+): Promise<{ files: string[]; layouts: string[] }> {
+  const files: string[] = [];
+  const layouts: string[] = [];
 
-  for (const entry of entries) {
-    if (isPrivateSegment(entry.name)) continue;
-    const full = join(root, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...await walk(full, extensions));
-    } else if (entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext))) {
-      out.push(full);
+  async function recurse(dir: string): Promise<void> {
+    const entries = await readdir(dir, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (isPrivateSegment(entry.name)) continue;
+        await recurse(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!extensions.some((ext) => entry.name.endsWith(ext))) continue;
+      if (isLayoutFile(entry.name, extensions)) {
+        layouts.push(full);
+        continue;
+      }
+      if (isPrivateSegment(entry.name)) continue;
+      files.push(full);
     }
   }
 
-  return out;
+  await recurse(root);
+  return { files, layouts };
 }
 
 function normalizeRelativeFile(file: string, root?: string): string {

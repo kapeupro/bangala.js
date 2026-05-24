@@ -7,7 +7,7 @@
 ### The full-stack framework that ships minimal JavaScript.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![npm](https://img.shields.io/badge/npm-v0.5.0-blue.svg)](https://www.npmjs.com/package/bangala)
+[![npm](https://img.shields.io/badge/npm-v1.0.0-blue.svg)](https://www.npmjs.com/package/bangala)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 </div>
@@ -34,10 +34,10 @@ only travels to the client where you explicitly ask for it.
 
 ## Status
 
-v0.5.0 ships **sub-project 1** (the `.bangala` compiler and server runtime),
-**sub-project 2** (the client islands runtime), **sub-project 3**
-(file-based routing), and **sub-project 4** (Vite dev server + build helpers).
-It also ships **sub-project 5**: CLI, scaffolding, and deploy adapters. Design specs live under
+v1.0.0 ships the complete first stable foundation: the `.bangala` compiler,
+client islands runtime, file-based routing with layouts, Vite dev/build
+helpers, static generation for dynamic routes, CLI scaffolding, deploy adapters,
+and browser e2e coverage. Design specs live under
 [`docs/superpowers/specs/`](./docs/superpowers/specs).
 
 ## Install
@@ -143,7 +143,7 @@ await dev.listen(5173);
 await buildBangala({
   root: process.cwd(),
   outDir: "dist",
-  prerender: ["/blog/hello-world"], // dynamic routes opt in explicitly
+  prerender: ["/blog/hello-world"], // optional extra paths
 });
 ```
 
@@ -178,7 +178,8 @@ The compiled module exports `render(props): Promise<string>`.
 ### `discoverRoutes(root, options?)`
 
 Walks a directory and returns a sorted manifest of `.bangala` page routes.
-Private files and folders starting with `_` or `.` are ignored.
+Private files and folders starting with `_` or `.` are ignored, except
+`_layout.bangala`, which is attached to descendant routes as a shared shell.
 
 ```ts
 import { discoverRoutes, createRoutes, matchRoute } from "bangala/router";
@@ -199,6 +200,16 @@ Supported file conventions:
 
 `matchRoute(routes, pathname)` returns `{ route, pathname, params }` or `null`.
 Dynamic params are strings; catch-all params are string arrays.
+
+Route layouts are conventional:
+
+| File | Applies to |
+|---|---|
+| `pages/_layout.bangala` | Every route under `pages/` |
+| `pages/docs/_layout.bangala` | `pages/docs/**` routes |
+
+Layouts render outermost-first and receive the same props as the page. Place the
+child route with `<slot/>`.
 
 ### `bangala()` Vite plugin
 
@@ -227,8 +238,8 @@ await server.listen(5173);
 ### `buildBangala(options?)`
 
 Bundles `bangala/client/auto` and prerenders HTML files into `outDir`.
-Static routes are prerendered by default. Dynamic routes must be passed through
-`prerender`.
+Static routes are prerendered by default. Dynamic routes can opt into static
+generation by exporting `getStaticPaths()` from the page module.
 
 ```ts
 await buildBangala({
@@ -237,6 +248,18 @@ await buildBangala({
   outDir: "dist",
   prerender: ["/blog/first-post"],
 });
+```
+
+```bangala
+---
+export async function getStaticPaths() {
+  return [
+    { params: { slug: "hello-world" } },
+    { params: { slug: "release-notes" } },
+  ];
+}
+---
+<h1>{props.params.slug}</h1>
 ```
 
 ### CLI
@@ -348,7 +371,7 @@ alongside them are free to evolve.
 ## Roadmap
 
 bangala.js is structured as five sub-projects, each with its own spec/plan
-cycle. v0.5.0 delivers all five planned v1 foundations:
+cycle. v1.0.0 delivers all five planned v1 foundations:
 
 | # | Sub-project | Status |
 |---|---|---|

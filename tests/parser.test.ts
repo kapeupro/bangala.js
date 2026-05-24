@@ -7,6 +7,39 @@ describe("parse — frontmatter", () => {
     expect(tpl.frontmatter).toBe("const x = 1");
   });
 
+  it("ignores frontmatter fences inside JavaScript template strings", () => {
+    const tpl = parse([
+      "---",
+      "const markdown = `",
+      "---",
+      "title: nested",
+      "---",
+      "`",
+      "---",
+      "<h1>After</h1>",
+    ].join("\n"));
+
+    expect(tpl.frontmatter).toContain("title: nested");
+    expect(tpl.nodes).toEqual([
+      { type: "Element", tag: "h1", attributes: [], children: [{ type: "Text", value: "After" }] },
+    ]);
+  });
+
+  it("ignores frontmatter fences inside comments", () => {
+    const tpl = parse([
+      "---",
+      "/*",
+      "---",
+      "*/",
+      "const ok = true",
+      "---",
+      "{ok}",
+    ].join("\n"));
+
+    expect(tpl.frontmatter).toContain("const ok = true");
+    expect(tpl.nodes).toEqual([{ type: "Expression", code: "ok" }]);
+  });
+
   it("returns empty frontmatter when there is none", () => {
     const tpl = parse("hello");
     expect(tpl.frontmatter).toBe("");

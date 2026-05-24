@@ -31,6 +31,14 @@ describe("render — integration", () => {
     const src = "---\nconst total = await Promise.resolve(7)\n---\n<span>{total}</span>";
     expect(await compileAndRender(src)).toBe("<span>7</span>");
   });
+
+  it("HTML-escapes dynamic attribute values", async () => {
+    const src = `<bangala-island data-props={JSON.stringify(props.payload)}></bangala-island>`;
+    const html = await compileAndRender(src, { payload: { name: "Ada", quote: '"hi"' } });
+    expect(html).toBe(
+      `<bangala-island data-props="{&quot;name&quot;:&quot;Ada&quot;,&quot;quote&quot;:&quot;\\&quot;hi\\&quot;&quot;}"></bangala-island>`,
+    );
+  });
 });
 
 describe("compile — island markers", () => {

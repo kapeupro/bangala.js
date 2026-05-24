@@ -8,6 +8,19 @@ function literal(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
 }
 
+/**
+ * Escapes a static attribute value for HTML emission. Doubles up as both
+ * an HTML-attribute escape (must escape `&`, `"`) AND a JS template-literal
+ * escape (must escape backticks and `${`). The HTML escape runs first; the
+ * template-literal escape then runs over the (already HTML-safe) text.
+ */
+function attrLiteral(text: string): string {
+  const htmlEscaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;");
+  return literal(htmlEscaped);
+}
+
 function attrsToObject(attributes: Attribute[]): string {
   const entries = attributes.map((a) => {
     const value = a.dynamic ? a.value : JSON.stringify(a.value);
@@ -38,7 +51,7 @@ export function generate(
       .map((a) =>
         a.dynamic
           ? ` ${a.name}="\${escape(${a.value})}"`
-          : ` ${a.name}="${literal(a.value)}"`,
+          : ` ${a.name}="${attrLiteral(a.value)}"`,
       )
       .join("");
   }
@@ -87,12 +100,14 @@ export function generate(
   }
 
   const renderBody = genNodes(template.nodes);
+  const { topLevel, inRender } = splitFrontmatterExports(body);
   const lines = [
     `import { escape, renderComponent, island } from "bangala/runtime";`,
     ...imports,
     ``,
+    topLevel,
     `async function render(props) {`,
-    body ? `  ${body.split("\n").join("\n  ")}` : "",
+    inRender ? `  ${inRender.split("\n").join("\n  ")}` : "",
     `  return \`${renderBody}\`;`,
     `}`,
     ``,
@@ -100,4 +115,50 @@ export function generate(
     `export default { render };`,
   ];
   return lines.filter((line) => line !== "").join("\n");
+}
+
+/**
+ * Splits the frontmatter into two pieces:
+ *  - `topLevel`: lines that must live at the top of the generated module
+ *    (they use `export`, ESM doesn't allow that inside a function body)
+ *  - `inRender`: everything else, executed inside the page's render(props).
+ *
+ * Function/class declarations whose header carries `export` are kept as a
+ * single block by following brace depth across lines.
+ */
+function splitFrontmatterExports(body: string): { topLevel: string; inRender: string } {
+  if (!body) return { topLevel: "", inRender: "" };
+  const lines = body.split("\n");
+  const topLines: string[] = [];
+  const renderLines: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i]!;
+    if (!/^\s*export\b/.test(line)) {
+      renderLines.push(line);
+      i++;
+      continue;
+    }
+    const trimmed = line.trim();
+    const isBlock = /^export\s+(?:async\s+)?(?:function|class)\b/.test(trimmed);
+    if (!isBlock) {
+      topLines.push(line);
+      i++;
+      continue;
+    }
+    const start = i;
+    let depth = 0;
+    let opened = false;
+    while (i < lines.length) {
+      const cur = lines[i]!;
+      for (const ch of cur) {
+        if (ch === "{") { depth++; opened = true; }
+        else if (ch === "}") depth--;
+      }
+      i++;
+      if (opened && depth === 0) break;
+    }
+    topLines.push(lines.slice(start, i).join("\n"));
+  }
+  return { topLevel: topLines.join("\n"), inRender: renderLines.join("\n") };
 }

@@ -88,13 +88,109 @@ const VOID_ELEMENTS = new Set([
 const RAW_TEXT_ELEMENTS = new Set(["script", "style", "textarea"]);
 
 export function parse(source: string, _filename = "<unknown>"): Template {
-  const fm = source.match(/^\s*---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
-  const frontmatter = fm ? fm[1]!.trim() : "";
-  const body = fm ? source.slice(fm[0].length) : source;
-  const offset = fm ? fm[0].length : 0;
+  const fm = extractFrontmatter(source);
+  const frontmatter = fm ? fm.frontmatter.trim() : "";
+  const body = fm ? source.slice(fm.bodyOffset) : source;
+  const offset = fm ? fm.bodyOffset : 0;
   const scanner = new Scanner(body, offset, source);
   const nodes = scanner.parseNodes(false);
   return { frontmatter, nodes };
+}
+
+/**
+ * Walks the source to find the closing `---\n` of the frontmatter while
+ * IGNORING `---` that appear inside JS string literals, template literals,
+ * or comments. Without this, a frontmatter like
+ *   ---
+ *   const x = `
+ *   ---
+ *   inner
+ *   ---
+ *   `
+ *   ---
+ * would close after the first interior `---`, breaking the parse.
+ * Returns null when there is no frontmatter.
+ */
+export function extractFrontmatter(
+  source: string,
+): { frontmatter: string; bodyOffset: number } | null {
+  const opener = source.match(/^\s*---\r?\n/);
+  if (!opener) return null;
+  const fmStart = opener[0].length;
+  let i = fmStart;
+  let state: "code" | "single" | "double" | "backtick" | "line-comment" | "block-comment" = "code";
+  let backtickExprDepth = 0;
+
+  function atLineStart(): boolean {
+    return i === fmStart || source[i - 1] === "\n";
+  }
+
+  function isClosingFence(): boolean {
+    if (!atLineStart()) return false;
+    if (!source.startsWith("---", i)) return false;
+    const after = source[i + 3];
+    return after === undefined || after === "\n" || after === "\r";
+  }
+
+  while (i < source.length) {
+    if (state === "code" && isClosingFence()) {
+      const fmEnd = i - 1; // trailing \n before the ---
+      let bodyOffset = i + 3;
+      if (source[bodyOffset] === "\r") bodyOffset++;
+      if (source[bodyOffset] === "\n") bodyOffset++;
+      return { frontmatter: source.slice(fmStart, Math.max(fmStart, fmEnd)), bodyOffset };
+    }
+
+    const ch = source[i]!;
+    const next = source[i + 1];
+
+    switch (state) {
+      case "code":
+        if (ch === '"') state = "double";
+        else if (ch === "'") state = "single";
+        else if (ch === "`") state = "backtick";
+        else if (ch === "/" && next === "/") { state = "line-comment"; i++; }
+        else if (ch === "/" && next === "*") { state = "block-comment"; i++; }
+        i++;
+        break;
+      case "single":
+        if (ch === "\\") i += 2;
+        else if (ch === "'" || ch === "\n") { state = "code"; i++; }
+        else i++;
+        break;
+      case "double":
+        if (ch === "\\") i += 2;
+        else if (ch === '"' || ch === "\n") { state = "code"; i++; }
+        else i++;
+        break;
+      case "backtick":
+        if (ch === "\\") { i += 2; break; }
+        if (ch === "`") { state = "code"; i++; break; }
+        if (ch === "$" && next === "{") {
+          backtickExprDepth = 1;
+          i += 2;
+          while (i < source.length && backtickExprDepth > 0) {
+            const c = source[i]!;
+            if (c === "{") backtickExprDepth++;
+            else if (c === "}") backtickExprDepth--;
+            i++;
+          }
+          break;
+        }
+        i++;
+        break;
+      case "line-comment":
+        if (ch === "\n") state = "code";
+        i++;
+        break;
+      case "block-comment":
+        if (ch === "*" && next === "/") { state = "code"; i += 2; }
+        else i++;
+        break;
+    }
+  }
+  // Unterminated frontmatter — be lenient
+  return { frontmatter: source.slice(fmStart), bodyOffset: source.length };
 }
 
 class Scanner {

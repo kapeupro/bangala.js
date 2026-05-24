@@ -12,6 +12,11 @@ coverage/
 # Test-generated temporary modules
 tests/.tmp/
 
+# Playwright e2e artifacts
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Logs
 *.log
 npm-debug.log*

@@ -65,7 +65,7 @@ const {
 </main>
 
 <footer>
-  <div class="footer-left">bangala.js - MIT License - v0.5.0</div>
+  <div class="footer-left">bangala.js - MIT License - v1.0.0</div>
   <div class="footer-links">
     {#each footerLinks as link}
       <a href={link.href}>{link.label}</a>
