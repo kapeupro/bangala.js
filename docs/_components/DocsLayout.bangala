@@ -1,0 +1,115 @@
+---
+import Layout from "./Layout.bangala"
+
+const navGroups = [
+  {
+    title: "Getting Started",
+    links: [
+      { label: "Introduction", href: "/docs", desc: "Why Bangala exists" },
+      { label: "Installation", href: "/docs/installation", desc: "Create or install a project" },
+      { label: "Project structure", href: "/docs/project-structure", desc: "Files and folders" },
+    ],
+  },
+  {
+    title: "Core Concepts",
+    links: [
+      { label: ".bangala syntax", href: "/docs/syntax", desc: "Frontmatter, HTML, slots" },
+      { label: "Islands Architecture", href: "/docs/islands", desc: "Explicit client JavaScript" },
+      { label: "File-based Routing", href: "/docs/routing", desc: "Static, dynamic, catch-all" },
+      { label: "Layouts", href: "/docs/layouts", desc: "Nested _layout.bangala shells" },
+      { label: "Static Generation", href: "/docs/static-generation", desc: "getStaticPaths and output" },
+    ],
+  },
+  {
+    title: "Reference",
+    links: [
+      { label: "API Reference", href: "/docs/api", desc: "Public exports" },
+      { label: "Adapters", href: "/docs/adapters", desc: "Deploy targets" },
+      { label: "Bangala vs Next.js", href: "/vs/nextjs", desc: "Competitor comparison" },
+    ],
+  },
+]
+
+const flatLinks = navGroups.flatMap((group) =>
+  group.links.map((link) => ({ ...link, group: group.title })),
+);
+
+const {
+  title = "Documentation | bangala.js",
+  description = "Documentation officielle de bangala.js : guide de demarrage, syntaxe .bangala, Islands Architecture, routing, layouts, API et deploiement.",
+  path = "/docs",
+  section = "Documentation",
+  lead = "",
+  headings = [],
+  prev = null,
+  next = null,
+} = props;
+
+const pageTitle = title.replace(" | bangala.js", "");
+const searchProps = JSON.stringify({ items: flatLinks });
+---
+<Layout title={title} description={description} path={path}>
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation">
+      <bangala-island data-entry="/islands/docs-search.js" data-props={searchProps} data-strategy="load">
+        <button type="button" class="docs-search-button" data-docs-search-open>
+          <span>Search docs</span>
+          <kbd>⌘K</kbd>
+        </button>
+      </bangala-island>
+
+      {#each navGroups as group}
+        <div class="docs-nav-group">
+          <h3>{group.title}</h3>
+          <ul>
+            {#each group.links as link}
+              <li>
+                <a href={link.href} class={link.href === path ? "active" : ""}>{link.label}</a>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/each}
+    </aside>
+
+    <article class="docs-content">
+      <header class="docs-header">
+        <p class="section-label">{section}</p>
+        <h1>{pageTitle}</h1>
+        {#if lead}
+          <p class="section-sub">{lead}</p>
+        {/if}
+      </header>
+
+      <slot/>
+
+      {#if prev || next}
+        <nav class="docs-pager" aria-label="Documentation pagination">
+          {#if prev}
+            <a class="docs-pager-link prev" href={prev.href}>
+              <span>Previous</span>
+              <strong>{prev.label}</strong>
+            </a>
+          {/if}
+          {#if next}
+            <a class="docs-pager-link next" href={next.href}>
+              <span>Next</span>
+              <strong>{next.label}</strong>
+            </a>
+          {/if}
+        </nav>
+      {/if}
+    </article>
+
+    <aside class="docs-toc" aria-label="On this page">
+      {#if headings.length > 0}
+        <h3>On this page</h3>
+        <ul>
+          {#each headings as item}
+            <li><a href={"#" + item.id}>{item.label}</a></li>
+          {/each}
+        </ul>
+      {/if}
+    </aside>
+  </div>
+</Layout>

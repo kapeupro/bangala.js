@@ -4,9 +4,13 @@ const pages = [
   { path: '/', title: /bangala/i },
   { path: '/docs', title: /Documentation|bangala/i },
   { path: '/docs/installation', title: /Installation/i },
+  { path: '/docs/project-structure', title: /Project structure/i },
+  { path: '/docs/syntax', title: /syntax/i },
   { path: '/docs/islands', title: /Islands/i },
   { path: '/docs/routing', title: /Routing/i },
-  { path: '/docs/syntax', title: /Syntax/i },
+  { path: '/docs/layouts', title: /Layouts/i },
+  { path: '/docs/static-generation', title: /Static Generation/i },
+  { path: '/docs/api', title: /API Reference/i },
   { path: '/docs/adapters', title: /Adapters/i },
   { path: '/play', title: /Playground/i },
   { path: '/vs/nextjs', title: /Next\.js/i },
@@ -26,3 +30,11 @@ for (const { path, title } of pages) {
     expect(errors, `errors on ${path}:\n${errors.join('\n')}`).toEqual([]);
   });
 }
+
+test('docs search opens with keyboard shortcut and filters results', async ({ page }) => {
+  await page.goto('/docs');
+  await page.keyboard.press('Control+K');
+  await expect(page.locator('.docs-search-panel')).toBeVisible();
+  await page.locator('.docs-search-field input').fill('layout');
+  await expect(page.locator('.docs-search-result', { hasText: 'Layouts' })).toBeVisible();
+});

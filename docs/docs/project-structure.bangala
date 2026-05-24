@@ -1,0 +1,52 @@
+---
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const tree = `my-site/
+  pages/
+    _layout.bangala
+    index.bangala
+    blog/
+      [slug].bangala
+  components/
+    Card.bangala
+    Counter.bangala
+  public/
+    islands/
+      counter.js
+    styles.css
+  package.json`;
+
+const headings = [
+  { id: "folders", label: "Folders" },
+  { id: "private-files", label: "Private files" },
+  { id: "public-assets", label: "Public assets" },
+];
+---
+<DocsLayout
+  title="Project structure | bangala.js"
+  description="Organisation recommandee pour un projet bangala.js."
+  path="/docs/project-structure"
+  section="Getting Started"
+  lead="A Bangala project is intentionally small: pages define routes, components render HTML, public assets are copied as-is, and islands live wherever your browser can import them."
+  headings={headings}
+  prev={{ href: "/docs/installation", label: "Installation" }}
+  next={{ href: "/docs/syntax", label: ".bangala syntax" }}
+>
+  <h2 id="folders">Folders</h2>
+  <CodeBlock filename="Project tree" lang="txt" code={tree}/>
+  <table class="docs-table">
+    <thead><tr><th>Folder</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>pages/</code></td><td>File-based routes and <code>_layout.bangala</code> files.</td></tr>
+      <tr><td><code>components/</code></td><td>Reusable server-rendered <code>.bangala</code> components.</td></tr>
+      <tr><td><code>public/</code></td><td>Static files copied to the site root: CSS, images, island modules.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="private-files">Private files</h2>
+  <p>Files and folders starting with <code>_</code> or <code>.</code> are private by default. The special exception is <code>_layout.bangala</code>, which is not a route but wraps descendant routes.</p>
+
+  <h2 id="public-assets">Public assets</h2>
+  <p>Anything in <code>public/</code> is served from <code>/</code>. If an island entry is <code>public/islands/counter.js</code>, reference it as <code>/islands/counter.js</code>.</p>
+</DocsLayout>

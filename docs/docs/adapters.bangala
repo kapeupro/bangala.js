@@ -1,164 +1,56 @@
 ---
-import Layout from "../_components/Layout.bangala"
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const build = `npm run build
+# upload dist/`;
+
+const vercel = `npx bangala deploy vercel`;
+const netlify = `npx bangala deploy netlify`;
+const cloudflare = `npx bangala deploy cloudflare-pages`;
+const github = `- name: Build site
+  run: npx bangala build --out-dir dist
+
+- name: Upload artifact
+  uses: actions/upload-pages-artifact@v3
+  with:
+    path: dist`;
+
+const headings = [
+  { id: "model", label: "Deployment model" },
+  { id: "vercel", label: "Vercel" },
+  { id: "netlify", label: "Netlify" },
+  { id: "cloudflare", label: "Cloudflare Pages" },
+  { id: "github-pages", label: "GitHub Pages" },
+];
 ---
-<Layout title="Adapters | bangala.js">
-  <div class="docs-layout">
-    <aside class="docs-sidebar">
-      <h3>Getting Started</h3>
-      <ul>
-        <li><a href="/docs">Introduction</a></li>
-        <li><a href="/docs/installation">Installation</a></li>
-      </ul>
-      <h3>Core Concepts</h3>
-      <ul>
-        <li><a href="/docs/islands">Islands Architecture</a></li>
-        <li><a href="/docs/routing">File-based Routing</a></li>
-        <li><a href="/docs/syntax">.bangala Syntax</a></li>
-      </ul>
-      <h3>Deployment</h3>
-      <ul>
-        <li><a href="/docs/adapters" class="active">Adapters</a></li>
-      </ul>
-    </aside>
-    <div class="docs-content">
-      <p class="section-label">Deployment</p>
-      <h1>Adapters</h1>
-      <p class="section-sub">bangala.js builds static HTML &mdash; nothing more. You can serve the output from any static host, or wire bangala into a server runtime as a library. The built-in adapters write the right config for the most common hosts.</p>
+<DocsLayout
+  title="Adapters | bangala.js"
+  description="Deployer un site bangala.js sur Vercel, Netlify, Cloudflare Pages, GitHub Pages ou un host statique."
+  path="/docs/adapters"
+  section="Reference"
+  lead="Bangala outputs static files. Adapters only write host config; there is no server runtime to deploy for the v1 static build."
+  headings={headings}
+  prev={{ href: "/docs/api", label: "API Reference" }}
+  next={{ href: "/vs/nextjs", label: "Bangala vs Next.js" }}
+>
+  <h2 id="model">Deployment model</h2>
+  <p>Run the build, then upload <code>dist/</code>. The generated HTML includes the client runtime only if islands are present and client injection is enabled.</p>
+  <CodeBlock filename="Terminal" lang="bash" code={build}/>
 
-      <h2>Deployment overview</h2>
-      <p>Running <code>bangala build</code> prerenders every route in <code>pages/</code> to plain HTML and bundles <code>bangala/client/auto</code> for island hydration. The output lands in <code>dist/</code> by default. There is no server runtime to deploy: just upload the directory to the host of your choice.</p>
-      <p>For convenience, <code>bangala deploy &lt;adapter&gt;</code> writes the configuration file that tells your host how to build and serve the project. The available adapters are <code>static</code>, <code>netlify</code>, <code>vercel</code>, and <code>cloudflare-pages</code>. You can also call <code>createDeployAdapter()</code> and <code>applyDeployAdapter()</code> programmatically from <code>bangala/adapters</code>.</p>
+  <h2 id="vercel">Vercel</h2>
+  <p>The Vercel adapter writes <code>vercel.json</code> with <code>npm run build</code> and <code>dist</code> as the output directory.</p>
+  <CodeBlock filename="Terminal" lang="bash" code={vercel}/>
 
-      <h2>Vercel</h2>
-      <p>The Vercel adapter writes a minimal <code>vercel.json</code> at the project root telling Vercel which command to run and which directory to serve:</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-header">
-          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">Terminal</span>
-        </div>
-        <div class="code-body">
-<span class="ln">1</span><span class="kw">npx</span> <span class="fn">bangala</span> deploy <span class="str">vercel</span>
-        </div>
-      </div>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-header">
-          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">vercel.json</span>
-        </div>
-        <div class="code-body">
-<span class="ln">1</span>&#123;
-<span class="ln">2</span>  <span class="str">"framework"</span>: <span class="kw">null</span>,
-<span class="ln">3</span>  <span class="str">"buildCommand"</span>: <span class="str">"npm run build"</span>,
-<span class="ln">4</span>  <span class="str">"outputDirectory"</span>: <span class="str">"dist"</span>
-<span class="ln">5</span>&#125;
-        </div>
-      </div>
-      <p>Then connect the repo on Vercel; the platform will run <code>npm run build</code> and serve <code>dist/</code>.</p>
+  <h2 id="netlify">Netlify</h2>
+  <p>The Netlify adapter writes <code>netlify.toml</code> with the build command, publish directory, and a safe content-type header.</p>
+  <CodeBlock filename="Terminal" lang="bash" code={netlify}/>
 
-      <h2>Netlify</h2>
-      <p>The Netlify adapter writes a <code>netlify.toml</code> at the project root. It declares the build command, the publish directory, and a sensible <code>X-Content-Type-Options: nosniff</code> header on every response:</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-header">
-          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">Terminal</span>
-        </div>
-        <div class="code-body">
-<span class="ln">1</span><span class="kw">npx</span> <span class="fn">bangala</span> deploy <span class="str">netlify</span>
-        </div>
-      </div>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-header">
-          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">netlify.toml</span>
-        </div>
-        <div class="code-body">
-<span class="ln">1</span>[build]
-<span class="ln">2</span>  command = <span class="str">"npm run build"</span>
-<span class="ln">3</span>  publish = <span class="str">"dist"</span>
-<span class="ln">4</span>
-<span class="ln">5</span>[[headers]]
-<span class="ln">6</span>  <span class="kw">for</span> = <span class="str">"/*"</span>
-<span class="ln">7</span>  [headers.values]
-<span class="ln">8</span>    X-Content-Type-Options = <span class="str">"nosniff"</span>
-        </div>
-      </div>
+  <h2 id="cloudflare">Cloudflare Pages</h2>
+  <p>The Cloudflare Pages adapter writes a minimal <code>wrangler.toml</code>. The aliases <code>cloudflare</code> and <code>cf-pages</code> are accepted.</p>
+  <CodeBlock filename="Terminal" lang="bash" code={cloudflare}/>
 
-      <h2>Cloudflare Pages</h2>
-      <p>The Cloudflare Pages adapter writes a <code>wrangler.toml</code> with the project name and build output directory:</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-header">
-          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">Terminal</span>
-        </div>
-        <div class="code-body">
-<span class="ln">1</span><span class="kw">npx</span> <span class="fn">bangala</span> deploy <span class="str">cloudflare-pages</span>
-        </div>
-      </div>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-header">
-          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">wrangler.toml</span>
-        </div>
-        <div class="code-body">
-<span class="ln">1</span>name = <span class="str">"bangala-app"</span>
-<span class="ln">2</span>pages_build_output_dir = <span class="str">"dist"</span>
-        </div>
-      </div>
-      <p>The shortcuts <code>cloudflare</code> and <code>cf-pages</code> are accepted as aliases for <code>cloudflare-pages</code>.</p>
-
-      <h2>Node.js / standalone</h2>
-      <p>The static adapter is a no-op &mdash; it doesn&rsquo;t write a config file, it just confirms that uploading <code>dist/</code> to any static host is the whole deployment story. Use it as documentation, or skip it entirely:</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-body">
-<span class="ln">1</span><span class="kw">npx</span> <span class="fn">bangala</span> deploy <span class="str">static</span>
-        </div>
-      </div>
-      <p>If you want to embed bangala in an existing Node.js server (Express, Hono, Fastify, etc.), call the compiler programmatically: <code>compile()</code> turns a <code>.bangala</code> source into an ESM module, and the generated <code>render(props)</code> returns an HTML string you can pipe straight to the response. Server-side rendering on demand &mdash; without the build step &mdash; is not part of the v1.0 adapter surface, but the compiler is a public API you can wire up yourself.</p>
-      <p>Routing helpers (<code>discoverRoutes</code>, <code>matchRoute</code>) are also exported from <code>bangala/router</code> so a custom server can resolve URLs the same way the build does.</p>
-
-      <h2>GitHub Pages</h2>
-      <p>GitHub Pages doesn&rsquo;t need an adapter file at all &mdash; it just needs a workflow that runs the build and uploads <code>dist/</code> as a Pages artifact. The bangala.js docs site you&rsquo;re reading right now is deployed exactly this way:</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-header">
-          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">.github/workflows/deploy-docs.yml</span>
-        </div>
-        <div class="code-body">
-<span class="ln">1</span>- <span class="kw">name</span>: Build site
-<span class="ln">2</span>  <span class="kw">run</span>: node ./dist/cli.js build --pages docs --out-dir _site
-<span class="ln">3</span>
-<span class="ln">4</span>- <span class="kw">name</span>: Upload artifact
-<span class="ln">5</span>  <span class="kw">uses</span>: actions/upload-pages-artifact@v3
-<span class="ln">6</span>  <span class="kw">with</span>:
-<span class="ln">7</span>    path: _site
-<span class="ln">8</span>
-<span class="ln">9</span>- <span class="kw">name</span>: Deploy
-<span class="ln">10</span>  <span class="kw">uses</span>: actions/deploy-pages@v4
-        </div>
-      </div>
-      <p>The same recipe works for any project: install dependencies, run <code>bangala build</code>, upload the output, deploy. No dedicated adapter is needed because GitHub Pages serves any static directory you hand it.</p>
-
-      <h2>Roadmap</h2>
-      <p>Server-side adapters (SSR on Vercel Functions, Cloudflare Workers, Node middleware) are deliberately out of scope for v1.0 &mdash; the build is static-first. If you have a use case that needs runtime rendering, file an issue: it&rsquo;s the next major area of the framework to explore.</p>
-
-      <div class="cta-actions" style="margin-top: 3rem; justify-content: flex-start;">
-        <a href="/docs" class="btn-primary">Back to Introduction</a>
-      </div>
-    </div>
-  </div>
-</Layout>
-<style>
-.docs-layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 4rem 2rem; gap: 4rem; align-items: flex-start; }
-.docs-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 100px; }
-.docs-sidebar h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-top: 1.5rem; margin-bottom: 0.75rem; }
-.docs-sidebar ul { list-style: none; padding: 0; margin: 0; }
-.docs-sidebar li { margin-bottom: 0.5rem; }
-.docs-sidebar a { color: var(--text2); text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
-.docs-sidebar a:hover, .docs-sidebar a.active { color: var(--accent); }
-.docs-content { flex-grow: 1; max-width: 760px; }
-.docs-content h1 { font-size: 3rem; margin-bottom: 1.5rem; letter-spacing: -1px; }
-.docs-content h2 { font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; letter-spacing: -0.5px; }
-.docs-content p { color: var(--text2); font-size: 1.1rem; line-height: 1.7; margin-bottom: 1.5rem; }
-.docs-content code { background: var(--bg2); padding: 0.2em 0.4em; border-radius: 4px; font-family: var(--mono); font-size: 0.9em; color: var(--accent); border: 1px solid var(--border); }
-@media (max-width: 768px) { .docs-layout { flex-direction: column; gap: 2rem; } .docs-sidebar { width: 100%; position: static; } }
-</style>
+  <h2 id="github-pages">GitHub Pages</h2>
+  <p>GitHub Pages does not need a dedicated adapter. Build the site and upload the generated directory as a Pages artifact.</p>
+  <CodeBlock filename=".github/workflows/deploy.yml" lang="yaml" code={github}/>
+</DocsLayout>

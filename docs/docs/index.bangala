@@ -1,129 +1,55 @@
 ---
-import Layout from "../_components/Layout.bangala"
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const quickstart = `npm create bangala@latest my-site
+cd my-site
+npm install
+npm run dev`;
+
+const firstPage = `---
+const name = props.name ?? "Ada"
 ---
-<Layout title="Documentation | bangala.js" description="Documentation officielle de bangala.js : guide de démarrage, syntaxe .bangala, Islands Architecture, déploiement." path="/docs">
-  <div class="docs-layout">
-    <aside class="docs-sidebar">
-      <h3>Getting Started</h3>
-      <ul>
-        <li><a href="/docs" class="active">Introduction</a></li>
-        <li><a href="/docs/installation">Installation</a></li>
-      </ul>
-      <h3>Core Concepts</h3>
-      <ul>
-        <li><a href="/docs/islands">Islands Architecture</a></li>
-        <li><a href="/docs/routing">File-based Routing</a></li>
-        <li><a href="/docs/syntax">.bangala Syntax</a></li>
-      </ul>
-      <h3>Deployment</h3>
-      <ul>
-        <li><a href="/docs/adapters">Adapters</a></li>
-      </ul>
-    </aside>
-    <div class="docs-content">
-      <p class="section-label">Documentation</p>
-      <h1>Introduction</h1>
-      <p class="section-sub">Welcome to the official bangala.js documentation. bangala.js is an HTML-first framework that prioritizes shipping zero JavaScript by default.</p>
+<h1>Hello {name}</h1>
+<p>This page ships no framework JavaScript.</p>`;
 
-      <h2>What is bangala.js?</h2>
-      <p>bangala.js is a compiler and Vite-powered framework that converts `.bangala` files directly into ESM modules. It follows the <strong>Islands Architecture</strong> pattern, which means components are rendered to static HTML on the server, and JavaScript is only loaded and hydrated on the client if you explicitly opt-in using directives like <code>client:load</code>.</p>
+const headings = [
+  { id: "what-is-bangala", label: "What is Bangala?" },
+  { id: "why-not-next", label: "Why not Next.js?" },
+  { id: "mental-model", label: "Mental model" },
+  { id: "start-here", label: "Start here" },
+];
+---
+<DocsLayout
+  title="Documentation | bangala.js"
+  description="Documentation officielle de bangala.js : framework HTML-first, islands explicites, routing fichier, layouts, static generation et API."
+  path="/docs"
+  section="Documentation"
+  lead="Bangala is an HTML-first framework for shipping sites that stay fast by default. Write .bangala files, prerender HTML, add islands only where the page truly needs JavaScript."
+  headings={headings}
+  next={{ href: "/docs/installation", label: "Installation" }}
+>
+  <h2 id="what-is-bangala">What is Bangala?</h2>
+  <p>Bangala compiles <code>.bangala</code> files into ESM modules with an async <code>render(props)</code> function. The output is plain HTML. Client JavaScript appears only when a component is marked with <code>client:load</code>, <code>client:idle</code>, or <code>client:visible</code>.</p>
 
-      <h2>Key Principles</h2>
-      <ul class="compare-list" style="margin-top: 1rem;">
-        <li><span class="check">✓</span> <strong>Zero JS by default</strong>: Static content requires no hydration.</li>
-        <li><span class="check">✓</span> <strong>Explicit interactivity</strong>: You decide exactly which parts of your page need JS.</li>
-        <li><span class="check">✓</span> <strong>HTML-first syntax</strong>: No JSX overhead. Just plain HTML with simple frontmatter logic.</li>
-        <li><span class="check">✓</span> <strong>Vite-powered</strong>: Blazing fast dev server and built-in optimization.</li>
-      </ul>
+  <CodeBlock filename="Terminal" lang="bash" code={quickstart}/>
 
-      <div class="cta-actions" style="margin-top: 3rem; justify-content: flex-start;">
-        <a href="/docs/installation" class="btn-primary">Next: Installation</a>
-      </div>
-    </div>
+  <h2 id="why-not-next">Why not Next.js?</h2>
+  <p>Next.js is excellent when you want the React platform. Bangala is for the other case: content-heavy sites, documentation, landing pages, blogs, and product pages where HTML should be the default and JavaScript should be an explicit decision.</p>
+  <div class="docs-callout">
+    <p><strong>Positioning:</strong> Bangala is not a Next.js clone. It competes by being smaller, more direct, and HTML-first. Routing, layouts, and static generation are familiar; the runtime model is intentionally lighter.</p>
   </div>
-</Layout>
-<style>
-.docs-layout {
-  display: flex;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 4rem 2rem;
-  gap: 4rem;
-  align-items: flex-start;
-}
-.docs-sidebar {
-  width: 240px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 100px;
-}
-.docs-sidebar h3 {
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text3);
-  margin-top: 1.5rem;
-  margin-bottom: 0.75rem;
-}
-.docs-sidebar ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.docs-sidebar li {
-  margin-bottom: 0.5rem;
-}
-.docs-sidebar a {
-  color: var(--text2);
-  text-decoration: none;
-  font-size: 0.95rem;
-  transition: color 0.2s;
-}
-.docs-sidebar a:hover, .docs-sidebar a.active {
-  color: var(--accent);
-}
-.docs-content {
-  flex-grow: 1;
-  max-width: 760px;
-}
-.docs-content h1 {
-  font-size: 3rem;
-  margin-bottom: 1.5rem;
-  letter-spacing: -1px;
-}
-.docs-content h2 {
-  font-size: 1.8rem;
-  margin-top: 3rem;
-  margin-bottom: 1rem;
-  letter-spacing: -0.5px;
-}
-.docs-content p {
-  color: var(--text2);
-  font-size: 1.1rem;
-  line-height: 1.7;
-  margin-bottom: 1.5rem;
-}
-.docs-content strong {
-  color: var(--text);
-  font-weight: 600;
-}
-.docs-content code {
-  background: var(--bg2);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-family: var(--mono);
-  font-size: 0.9em;
-  color: var(--accent);
-  border: 1px solid var(--border);
-}
-@media (max-width: 768px) {
-  .docs-layout {
-    flex-direction: column;
-    gap: 2rem;
-  }
-  .docs-sidebar {
-    width: 100%;
-    position: static;
-  }
-}
-</style>
+
+  <h2 id="mental-model">Mental model</h2>
+  <div class="docs-grid">
+    <a class="docs-card" href="/docs/syntax"><strong>1. Write HTML-first pages</strong><span>Use frontmatter, expressions, conditionals, loops, components, and one default slot.</span></a>
+    <a class="docs-card" href="/docs/routing"><strong>2. Let files become routes</strong><span><code>pages/index.bangala</code>, <code>[slug]</code>, and <code>[...catchAll]</code> map to URLs.</span></a>
+    <a class="docs-card" href="/docs/layouts"><strong>3. Compose with layouts</strong><span>Use <code>_layout.bangala</code> files to wrap route trees, outermost first.</span></a>
+    <a class="docs-card" href="/docs/islands"><strong>4. Hydrate islands explicitly</strong><span>Only interactive components load client modules; static content stays static.</span></a>
+  </div>
+
+  <CodeBlock filename="pages/index.bangala" code={firstPage}/>
+
+  <h2 id="start-here">Start here</h2>
+  <p>New project? Start with <a href="/docs/installation">Installation</a>. Learning the file format? Read <a href="/docs/syntax">.bangala syntax</a>. Building a site with shared chrome? Jump to <a href="/docs/layouts">Layouts</a> and <a href="/docs/static-generation">Static Generation</a>.</p>
+</DocsLayout>

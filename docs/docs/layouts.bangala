@@ -1,0 +1,58 @@
+---
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const rootLayout = `---
+const { title = "bangala.js" } = props
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>{title}</title>
+  </head>
+  <body>
+    <nav><a href="/">Home</a></nav>
+    <slot/>
+  </body>
+</html>`;
+
+const nestedLayout = `<section class="docs-shell">
+  <aside>Docs nav</aside>
+  <main><slot/></main>
+</section>`;
+
+const headings = [
+  { id: "root-layout", label: "Root layout" },
+  { id: "nested-layouts", label: "Nested layouts" },
+  { id: "props", label: "Props and slots" },
+  { id: "rules", label: "Rules" },
+];
+---
+<DocsLayout
+  title="Layouts | bangala.js"
+  description="Layouts routes avec _layout.bangala dans bangala.js."
+  path="/docs/layouts"
+  section="Core Concepts"
+  lead="Layouts are route wrappers. Put _layout.bangala in a folder and it wraps every descendant route, outermost first."
+  headings={headings}
+  prev={{ href: "/docs/routing", label: "File-based Routing" }}
+  next={{ href: "/docs/static-generation", label: "Static Generation" }}
+>
+  <h2 id="root-layout">Root layout</h2>
+  <p><code>pages/_layout.bangala</code> wraps every route in the app. Use it for the document shell, global nav, analytics, fonts, and global CSS.</p>
+  <CodeBlock filename="pages/_layout.bangala" code={rootLayout}/>
+
+  <h2 id="nested-layouts">Nested layouts</h2>
+  <p>Nested folders can add their own layout. <code>pages/docs/_layout.bangala</code> wraps only routes below <code>/docs</code>, inside the root layout.</p>
+  <CodeBlock filename="pages/docs/_layout.bangala" code={nestedLayout}/>
+
+  <h2 id="props">Props and slots</h2>
+  <p>Layouts receive the same route props as the page, including <code>params</code> and <code>url</code>. Place the child route with <code>&lt;slot/&gt;</code>. Do not print <code>props.children</code> manually unless you want escaped text.</p>
+
+  <h2 id="rules">Rules</h2>
+  <ul class="compare-list">
+    <li><span class="check">&middot;</span> <code>_layout.bangala</code> is never exposed as a route.</li>
+    <li><span class="check">&middot;</span> Layouts render outermost-first.</li>
+    <li><span class="check">&middot;</span> Private folders still stay private; layouts only apply inside discoverable route trees.</li>
+  </ul>
+</DocsLayout>

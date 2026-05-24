@@ -1,151 +1,82 @@
 ---
-import Layout from "../_components/Layout.bangala"
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const anatomy = [
+  "---",
+  'import Card from "../components/Card.bangala"',
+  "const posts = await db.posts.recent()",
+  "---",
+  "<h1>{posts.length} posts</h1>",
+  '<Card title="Latest">',
+  "  <p>HTML first. JavaScript when you ask.</p>",
+  "</Card>",
+].join("\n");
+
+const controlFlow = `{#if posts.length === 0}
+  <p>No posts yet.</p>
+{:else}
+  <ul>
+    {#each posts as post}
+      <li>{post.title}</li>
+    {/each}
+  </ul>
+{/if}`;
+
+const component = [
+  "---",
+  'import Card from "../components/Card.bangala"',
+  "---",
+  '<Card title="Hello" highlighted={true}>',
+  "  <p>This goes into the default slot.</p>",
+  "</Card>",
+].join("\n");
+
+const island = `<Counter start={10} client:load />
+<Newsletter client:idle />
+<Comments postId={post.id} client:visible />`;
+
+const headings = [
+  { id: "anatomy", label: "Anatomy" },
+  { id: "frontmatter", label: "Frontmatter" },
+  { id: "expressions", label: "Expressions" },
+  { id: "control-flow", label: "Control flow" },
+  { id: "components", label: "Components" },
+  { id: "client-directives", label: "Client directives" },
+];
 ---
-<Layout title=".bangala Syntax | bangala.js">
-  <div class="docs-layout">
-    <aside class="docs-sidebar">
-      <h3>Getting Started</h3>
-      <ul>
-        <li><a href="/docs">Introduction</a></li>
-        <li><a href="/docs/installation">Installation</a></li>
-      </ul>
-      <h3>Core Concepts</h3>
-      <ul>
-        <li><a href="/docs/islands">Islands Architecture</a></li>
-        <li><a href="/docs/routing">File-based Routing</a></li>
-        <li><a href="/docs/syntax" class="active">.bangala Syntax</a></li>
-      </ul>
-      <h3>Deployment</h3>
-      <ul>
-        <li><a href="/docs/adapters">Adapters</a></li>
-      </ul>
-    </aside>
-    <div class="docs-content">
-      <p class="section-label">Core Concepts</p>
-      <h1>.bangala Syntax</h1>
-      <p class="section-sub">A <code>.bangala</code> file is HTML, plus a tiny set of template constructs. No JSX, no virtual DOM &mdash; just markup that compiles directly to an ESM module.</p>
+<DocsLayout
+  title=".bangala syntax | bangala.js"
+  description="Reference de la syntaxe .bangala : frontmatter, expressions, control flow, composants, slots et client directives."
+  path="/docs/syntax"
+  section="Core Concepts"
+  lead=".bangala is HTML with a small template layer. No JSX, no virtual DOM, no client runtime unless you mark an island."
+  headings={headings}
+  prev={{ href: "/docs/project-structure", label: "Project structure" }}
+  next={{ href: "/docs/islands", label: "Islands Architecture" }}
+>
+  <h2 id="anatomy">Anatomy</h2>
+  <p>A file has optional JavaScript frontmatter between <code>---</code> fences, followed by an HTML-first template body.</p>
+  <CodeBlock filename="pages/index.bangala" code={anatomy}/>
 
-      <h2>Anatomy of a .bangala file</h2>
-      <p>Every <code>.bangala</code> file has two parts: an optional <strong>frontmatter</strong> block delimited by <code>---</code>, followed by the <strong>template body</strong>. The frontmatter is plain JavaScript (or TypeScript) executed once per render on the server. The body is HTML enriched with template expressions.</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-header">
-          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
-          <span class="code-fname">pages/index.bangala</span>
-        </div>
-        <div class="code-body">
-<span class="ln">1</span><span class="ctag">---</span>
-<span class="ln">2</span><span class="kw">import</span> Layout <span class="kw">from</span> <span class="str">"../components/Layout.bangala"</span>
-<span class="ln">3</span><span class="kw">const</span> posts = <span class="kw">await</span> db.posts.recent()
-<span class="ln">4</span><span class="ctag">---</span>
-<span class="ln">5</span><span class="ctag">&lt;Layout</span> title=<span class="str">"Home"</span><span class="ctag">&gt;</span>
-<span class="ln">6</span>  <span class="ctag">&lt;h1&gt;</span>&#123;posts.length&#125; posts<span class="ctag">&lt;/h1&gt;</span>
-<span class="ln">7</span><span class="ctag">&lt;/Layout&gt;</span>
-        </div>
-      </div>
-      <p>The compiler emits a single ESM module exporting an async <code>render(props)</code> function. The frontmatter runs at the start of that function; the template body becomes the returned HTML string.</p>
+  <h2 id="frontmatter">Frontmatter</h2>
+  <p>Frontmatter runs inside the generated async <code>render(props)</code> function. Use it for imports, local variables, <code>await</code>, and reading <code>props</code>. Exported declarations such as <code>getStaticPaths()</code> are hoisted to module scope.</p>
 
-      <h2>Frontmatter</h2>
-      <p>The frontmatter is the block between the first two <code>---</code> lines. It is plain JS/TS, so you can:</p>
-      <ul class="compare-list" style="margin-top: 1rem;">
-        <li><span class="check">&middot;</span> Import other components with <code>import Foo from "./Foo.bangala"</code> (the compiler rewrites <code>.bangala</code> specifiers to <code>.js</code> in the generated module).</li>
-        <li><span class="check">&middot;</span> Import third-party packages just like any ESM file.</li>
-        <li><span class="check">&middot;</span> Declare <code>const</code> / <code>let</code> bindings that are visible to the template body.</li>
-        <li><span class="check">&middot;</span> Use top-level <code>await</code> &mdash; the generated <code>render</code> is async.</li>
-        <li><span class="check">&middot;</span> Read the page&rsquo;s <code>props</code> directly: it&rsquo;s the only implicit binding, provided by the caller (the dev server for pages, or the parent for components).</li>
-      </ul>
-      <p>The frontmatter is optional. A file without <code>---</code> markers is just a template body.</p>
-
-      <h2>Interpolation</h2>
-      <p>Anywhere in the template body, <code>&#123;expression&#125;</code> evaluates a JavaScript expression and inserts its result as text. The result is <strong>HTML-escaped automatically</strong> &mdash; <code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code>, <code>"</code> and <code>'</code> are all encoded, so user-controlled values can never inject markup.</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-body">
-<span class="ln">1</span><span class="ctag">&lt;p&gt;</span>Hello &#123;props.user.name&#125;<span class="ctag">&lt;/p&gt;</span>
-<span class="ln">2</span><span class="ctag">&lt;a</span> href=&#123;post.url&#125;<span class="ctag">&gt;</span>&#123;post.title&#125;<span class="ctag">&lt;/a&gt;</span>
-        </div>
-      </div>
-      <p>The braces only delimit the expression boundary &mdash; the contents are passed verbatim to JavaScript, so you can write <code>&#123;a + b&#125;</code>, <code>&#123;user?.name ?? "anon"&#125;</code>, ternaries, function calls, anything. The compiler doesn&rsquo;t parse the JS itself; it only finds the matching closing brace.</p>
-      <p>If you need to render raw HTML, you have to step out of the expression mechanism and write the markup directly in the template body &mdash; there is no <code>&#123;@html ...&#125;</code> equivalent. This is by design: it keeps every interpolated value escape-safe.</p>
-
-      <h2>Conditionals</h2>
-      <p>Use <code>&#123;#if condition&#125; ... &#123;/if&#125;</code> for conditional rendering. The optional <code>&#123;:else&#125;</code> branch handles the negative case.</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-body">
-<span class="ln">1</span>&#123;#if posts.length === 0&#125;
-<span class="ln">2</span>  <span class="ctag">&lt;p&gt;</span>No posts yet.<span class="ctag">&lt;/p&gt;</span>
-<span class="ln">3</span>&#123;:else&#125;
-<span class="ln">4</span>  <span class="ctag">&lt;p&gt;</span>&#123;posts.length&#125; posts published.<span class="ctag">&lt;/p&gt;</span>
-<span class="ln">5</span>&#123;/if&#125;
-        </div>
-      </div>
-      <p>The condition is any JavaScript expression. The block must be closed; the parser will raise a localised error if it isn&rsquo;t.</p>
-
-      <h2>Loops</h2>
-      <p>Use <code>&#123;#each list as item&#125; ... &#123;/each&#125;</code> to iterate over any iterable.</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-body">
-<span class="ln">1</span><span class="ctag">&lt;ul&gt;</span>
-<span class="ln">2</span>  &#123;#each posts as post&#125;
-<span class="ln">3</span>    <span class="ctag">&lt;li&gt;</span>&#123;post.title&#125;<span class="ctag">&lt;/li&gt;</span>
-<span class="ln">4</span>  &#123;/each&#125;
-<span class="ln">5</span><span class="ctag">&lt;/ul&gt;</span>
-        </div>
-      </div>
-      <p>The <code>list</code> part is a JS expression; <code>item</code> is the loop binding. There is no implicit <code>index</code> binding &mdash; if you need indices, map your list to <code>[item, index]</code> tuples in the frontmatter.</p>
-
-      <h2>Components</h2>
-      <p>A capitalised tag is a component reference. The compiler looks up the matching default import in the frontmatter and calls its <code>render()</code>. Attributes become props; children fill the component&rsquo;s <code>&lt;slot/&gt;</code>.</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-body">
-<span class="ln">1</span><span class="ctag">---</span>
-<span class="ln">2</span><span class="kw">import</span> Card <span class="kw">from</span> <span class="str">"../components/Card.bangala"</span>
-<span class="ln">3</span><span class="ctag">---</span>
-<span class="ln">4</span><span class="ctag">&lt;Card</span> title=<span class="str">"Hello"</span> highlighted=&#123;true&#125;<span class="ctag">&gt;</span>
-<span class="ln">5</span>  <span class="ctag">&lt;p&gt;</span>This goes into the card&rsquo;s slot.<span class="ctag">&lt;/p&gt;</span>
-<span class="ln">6</span><span class="ctag">&lt;/Card&gt;</span>
-        </div>
-      </div>
-      <p>Static attributes (<code>title="Hello"</code>) are passed as strings. Bracketed attributes (<code>highlighted=&#123;true&#125;</code>) are JS expressions. Inside <code>Card.bangala</code>, place a single <code>&lt;slot/&gt;</code> wherever the children should appear. bangala supports one default slot per component.</p>
-
-      <h2>Client directives</h2>
-      <p>Add <code>client:load</code>, <code>client:idle</code>, or <code>client:visible</code> to a component to turn it into an <strong>island</strong>. The component is still rendered to HTML on the server; the directive only tells the client runtime when to wake it up.</p>
-      <div class="hero-code" style="margin: 1.5rem 0 2rem;">
-        <div class="code-body">
-<span class="ln">1</span><span class="ctag">&lt;Counter</span> start=&#123;10&#125; client:load <span class="ctag">/&gt;</span>
-<span class="ln">2</span><span class="ctag">&lt;Newsletter</span> client:idle <span class="ctag">/&gt;</span>
-<span class="ln">3</span><span class="ctag">&lt;CommentBox</span> postId=&#123;id&#125; client:visible <span class="ctag">/&gt;</span>
-        </div>
-      </div>
-      <p>See <a href="/docs/islands">Islands Architecture</a> for the full hydration story and the <code>mount</code> contract each island must implement.</p>
-
-      <h2>What&rsquo;s not supported yet</h2>
-      <p>bangala.js is intentionally small. A few things you may expect from other frameworks are not here yet:</p>
-      <ul class="compare-list" style="margin-top: 1rem;">
-        <li><span class="check">&middot;</span> <strong>JSX</strong>. The whole point is to stay HTML-first; there is no <code>className</code>, no fragment, no JS expression syntax for elements.</li>
-        <li><span class="check">&middot;</span> <strong>Server-side comments inside the template body</strong>. Use standard HTML comments (<code>&lt;!-- ... --&gt;</code>) &mdash; they are stripped by the parser and never reach the output.</li>
-        <li><span class="check">&middot;</span> <strong>&#123;:else if&#125;</strong>. Only <code>&#123;:else&#125;</code> is recognised; chain a nested <code>&#123;#if&#125;</code> inside the else branch if you need it.</li>
-        <li><span class="check">&middot;</span> <strong>Multi-line frontmatter imports</strong>. Each <code>import</code> must fit on a single line: the extractor reads imports line by line.</li>
-        <li><span class="check">&middot;</span> <strong>Multiple named slots</strong>. One default slot per component for now.</li>
-        <li><span class="check">&middot;</span> <strong>Raw HTML interpolation</strong>. All <code>&#123;...&#125;</code> output is HTML-escaped, with no opt-out.</li>
-      </ul>
-
-      <div class="cta-actions" style="margin-top: 3rem; justify-content: flex-start;">
-        <a href="/docs/adapters" class="btn-primary">Next: Adapters</a>
-      </div>
-    </div>
+  <h2 id="expressions">Expressions</h2>
+  <p><code>{`{expression}`}</code> inserts a JavaScript expression into HTML and escapes the result. This protects text and attribute values from markup injection by default.</p>
+  <div class="docs-callout">
+    <p>There is no raw HTML interpolation escape hatch in v1.0. If you need markup, write markup in the template rather than returning it from a string.</p>
   </div>
-</Layout>
-<style>
-.docs-layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 4rem 2rem; gap: 4rem; align-items: flex-start; }
-.docs-sidebar { width: 240px; flex-shrink: 0; position: sticky; top: 100px; }
-.docs-sidebar h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-top: 1.5rem; margin-bottom: 0.75rem; }
-.docs-sidebar ul { list-style: none; padding: 0; margin: 0; }
-.docs-sidebar li { margin-bottom: 0.5rem; }
-.docs-sidebar a { color: var(--text2); text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
-.docs-sidebar a:hover, .docs-sidebar a.active { color: var(--accent); }
-.docs-content { flex-grow: 1; max-width: 760px; }
-.docs-content h1 { font-size: 3rem; margin-bottom: 1.5rem; letter-spacing: -1px; }
-.docs-content h2 { font-size: 1.8rem; margin-top: 3rem; margin-bottom: 1rem; letter-spacing: -0.5px; }
-.docs-content p { color: var(--text2); font-size: 1.1rem; line-height: 1.7; margin-bottom: 1.5rem; }
-.docs-content code { background: var(--bg2); padding: 0.2em 0.4em; border-radius: 4px; font-family: var(--mono); font-size: 0.9em; color: var(--accent); border: 1px solid var(--border); }
-@media (max-width: 768px) { .docs-layout { flex-direction: column; gap: 2rem; } .docs-sidebar { width: 100%; position: static; } }
-</style>
+
+  <h2 id="control-flow">Control flow</h2>
+  <p>Use <code>{`{#if}`}</code>, <code>{`{:else}`}</code>, and <code>{`{#each}`}</code> for server-side branching and loops.</p>
+  <CodeBlock filename="control-flow.bangala" code={controlFlow}/>
+
+  <h2 id="components">Components</h2>
+  <p>A capitalized tag maps to a default import. Static attributes become string props; bracketed attributes are JavaScript expressions. A component places children with <code>&lt;slot/&gt;</code>.</p>
+  <CodeBlock filename="pages/index.bangala" code={component}/>
+
+  <h2 id="client-directives">Client directives</h2>
+  <p>Add a <code>client:*</code> directive to turn a server-rendered component into a browser island.</p>
+  <CodeBlock filename="islands.bangala" code={island}/>
+</DocsLayout>

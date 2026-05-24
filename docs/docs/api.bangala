@@ -1,0 +1,79 @@
+---
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const compile = [
+  'import { compile } from "bangala";',
+  "",
+  "const result = compile(source, {",
+  '  filename: "pages/index.bangala",',
+  "});",
+  "",
+  "// result.code",
+  "// result.islands",
+  "// result.dependencies",
+].join("\n");
+
+const router = [
+  'import { discoverRoutes, matchRoute } from "bangala/router";',
+  "",
+  'const routes = await discoverRoutes("pages");',
+  'const match = matchRoute(routes, "/docs/routing");',
+].join("\n");
+
+const vite = [
+  'import { createBangalaDevServer, buildBangala } from "bangala/vite";',
+  "",
+  "const server = await createBangalaDevServer({ root: process.cwd() });",
+  "await server.listen(5173);",
+  "",
+  'await buildBangala({ root: process.cwd(), outDir: "dist" });',
+].join("\n");
+
+const client = [
+  'import { hydrate } from "bangala/client";',
+  "",
+  "hydrate(document, {",
+  "  onError(error) {",
+  "    report(error.code, error.entry);",
+  "  },",
+  "});",
+].join("\n");
+
+const headings = [
+  { id: "compiler", label: "bangala" },
+  { id: "router", label: "bangala/router" },
+  { id: "vite", label: "bangala/vite" },
+  { id: "client", label: "bangala/client" },
+  { id: "adapters", label: "bangala/adapters" },
+];
+---
+<DocsLayout
+  title="API Reference | bangala.js"
+  description="Reference des exports publics bangala, bangala/router, bangala/vite, bangala/client et bangala/adapters."
+  path="/docs/api"
+  section="Reference"
+  lead="The public API is small and split by runtime: compiler, router, Vite integration, client hydration, and deploy adapters."
+  headings={headings}
+  prev={{ href: "/docs/static-generation", label: "Static Generation" }}
+  next={{ href: "/docs/adapters", label: "Adapters" }}
+>
+  <h2 id="compiler"><code>bangala</code></h2>
+  <p><code>compile(source, options)</code> turns a <code>.bangala</code> source string into generated ESM code and metadata.</p>
+  <CodeBlock filename="compiler.ts" lang="ts" code={compile}/>
+
+  <h2 id="router"><code>bangala/router</code></h2>
+  <p>Use <code>discoverRoutes()</code>, <code>createRoutes()</code>, <code>routePathFromFile()</code>, and <code>matchRoute()</code> for file-route manifests.</p>
+  <CodeBlock filename="routes.ts" lang="ts" code={router}/>
+
+  <h2 id="vite"><code>bangala/vite</code></h2>
+  <p>Use <code>bangala()</code> as a Vite plugin, or call <code>createBangalaDevServer()</code> and <code>buildBangala()</code> from your own tooling.</p>
+  <CodeBlock filename="server.ts" lang="ts" code={vite}/>
+
+  <h2 id="client"><code>bangala/client</code></h2>
+  <p>The client runtime exports <code>hydrate()</code> and stable hydration error types. The auto entrypoint is <code>bangala/client/auto</code>.</p>
+  <CodeBlock filename="client.ts" lang="ts" code={client}/>
+
+  <h2 id="adapters"><code>bangala/adapters</code></h2>
+  <p>Deployment helpers include <code>listDeployAdapters()</code>, <code>createDeployAdapter()</code>, and <code>applyDeployAdapter()</code>.</p>
+</DocsLayout>

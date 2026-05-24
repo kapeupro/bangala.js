@@ -1,0 +1,45 @@
+---
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const build = `bangala build --out-dir dist`;
+
+const staticPaths = [
+  "---",
+  "export async function getStaticPaths() {",
+  "  return [",
+  '    { params: { slug: "hello-world" } },',
+  '    { params: { slug: "release-notes" } },',
+  "  ];",
+  "}",
+  "---",
+  "<h1>{props.params.slug}</h1>",
+].join("\n");
+
+const headings = [
+  { id: "static-routes", label: "Static routes" },
+  { id: "dynamic-routes", label: "Dynamic routes" },
+  { id: "output", label: "Output" },
+];
+---
+<DocsLayout
+  title="Static Generation | bangala.js"
+  description="Build statique dans bangala.js avec getStaticPaths pour routes dynamiques."
+  path="/docs/static-generation"
+  section="Core Concepts"
+  lead="Bangala builds static HTML first. Static routes are included automatically; dynamic routes opt in with getStaticPaths()."
+  headings={headings}
+  prev={{ href: "/docs/layouts", label: "Layouts" }}
+  next={{ href: "/docs/api", label: "API Reference" }}
+>
+  <h2 id="static-routes">Static routes</h2>
+  <p>Every route without dynamic segments is prerendered by <code>bangala build</code>.</p>
+  <CodeBlock filename="Terminal" lang="bash" code={build}/>
+
+  <h2 id="dynamic-routes">Dynamic routes</h2>
+  <p>A dynamic page exports <code>getStaticPaths()</code>. Each returned <code>params</code> object is substituted into the file route pattern.</p>
+  <CodeBlock filename="pages/posts/[slug].bangala" code={staticPaths}/>
+
+  <h2 id="output">Output</h2>
+  <p>The build writes HTML files to <code>dist/</code> and bundles the tiny islands runtime as <code>assets/bangala-client.js</code>. Upload the directory to any static host.</p>
+</DocsLayout>
