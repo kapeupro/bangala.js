@@ -1,0 +1,110 @@
+---
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const marketingPage = [
+  "---",
+  'const title = "Launch faster"',
+  "---",
+  '<section class="hero">',
+  "  <h1>{title}</h1>",
+  "  <p>Static HTML by default. Islands only when needed.</p>",
+  '  <a href="/docs/installation">Start building</a>',
+  "</section>",
+].join("\n");
+
+const blogRoute = [
+  "---",
+  "export async function getStaticPaths() {",
+  "  const posts = await getPosts();",
+  "  return posts.map((post) => ({ params: { slug: post.slug } }));",
+  "}",
+  "",
+  "const post = await getPost(props.params.slug);",
+  "---",
+  "<article>",
+  "  <h1>{post.title}</h1>",
+  "  <p>{post.description}</p>",
+  "</article>",
+].join("\n");
+
+const rootLayout = [
+  "---",
+  'const { title = "bangala.js" } = props',
+  "---",
+  "<!DOCTYPE html>",
+  '<html lang="en">',
+  "  <head>",
+  "    <title>{title}</title>",
+  '    <link rel="stylesheet" href="/styles.css"/>',
+  "  </head>",
+  "  <body>",
+  "    <nav>bangala.js</nav>",
+  "    <slot/>",
+  "  </body>",
+  "</html>",
+].join("\n");
+
+const islandPage = [
+  "---",
+  'import Counter from "../components/Counter.bangala"',
+  "---",
+  "<Counter start={0} client:idle />",
+].join("\n");
+
+const islandClient = [
+  "export async function mount(el, props) {",
+  '  const button = el.querySelector("button");',
+  "  let count = Number(props.start ?? 0);",
+  "",
+  '  button.addEventListener("click", () => {',
+  "    count += 1;",
+  "    button.textContent = `count=${count}`;",
+  "  });",
+  "}",
+].join("\n");
+
+const deploy = [
+  "npm run build",
+  "npx bangala deploy netlify",
+].join("\n");
+
+const headings = [
+  { id: "marketing-page", label: "Marketing page" },
+  { id: "blog", label: "Static blog" },
+  { id: "layout", label: "Site layout" },
+  { id: "island", label: "Counter island" },
+  { id: "deploy", label: "Deploy" },
+];
+---
+<DocsLayout
+  title="Examples | bangala.js"
+  description="Exemples Bangala copy-paste : landing page, blog statique, layout, island et deploy."
+  path="/docs/examples"
+  section="Guides"
+  lead="Copy these patterns into a project. Each example is intentionally small: Bangala should feel direct, not like a framework ceremony."
+  headings={headings}
+  prev={{ href: "/docs/static-generation", label: "Static Generation" }}
+  next={{ href: "/docs/from-nextjs", label: "From Next.js" }}
+>
+  <h2 id="marketing-page">Marketing page</h2>
+  <p>Use a normal <code>.bangala</code> page for static product copy. It builds to HTML and ships no framework JavaScript.</p>
+  <CodeBlock filename="pages/index.bangala" code={marketingPage}/>
+
+  <h2 id="blog">Static blog</h2>
+  <p>Dynamic routes become static pages when they export <code>getStaticPaths()</code>. The returned params drive the generated URLs.</p>
+  <CodeBlock filename="pages/blog/[slug].bangala" code={blogRoute}/>
+
+  <h2 id="layout">Site layout</h2>
+  <p>Put document chrome in <code>pages/_layout.bangala</code>. The page content is inserted with <code>&lt;slot/&gt;</code>.</p>
+  <CodeBlock filename="pages/_layout.bangala" code={rootLayout}/>
+
+  <h2 id="island">Counter island</h2>
+  <p>Server-render the initial HTML with a Bangala component, then hydrate only that component with a browser module.</p>
+  <CodeBlock filename="pages/index.bangala" code={islandPage}/>
+  <CodeBlock filename="public/islands/counter.js" lang="js" code={islandClient}/>
+
+  <h2 id="deploy">Deploy</h2>
+  <p>The static build can be uploaded anywhere. Adapters only write host config.</p>
+  <CodeBlock filename="Terminal" lang="bash" code={deploy}/>
+</DocsLayout>

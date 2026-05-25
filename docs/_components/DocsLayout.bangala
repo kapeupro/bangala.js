@@ -23,6 +23,13 @@ const navGroups = [
   {
     title: "Reference",
     links: [
+      { label: "Examples", href: "/docs/examples", desc: "Copyable recipes" },
+      { label: "From Next.js", href: "/docs/from-nextjs", desc: "Map concepts to Bangala" },
+    ],
+  },
+  {
+    title: "API",
+    links: [
       { label: "API Reference", href: "/docs/api", desc: "Public exports" },
       { label: "Adapters", href: "/docs/adapters", desc: "Deploy targets" },
       { label: "Bangala vs Next.js", href: "/vs/nextjs", desc: "Competitor comparison" },

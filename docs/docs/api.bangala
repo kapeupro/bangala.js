@@ -55,7 +55,7 @@ const headings = [
   section="Reference"
   lead="The public API is small and split by runtime: compiler, router, Vite integration, client hydration, and deploy adapters."
   headings={headings}
-  prev={{ href: "/docs/static-generation", label: "Static Generation" }}
+  prev={{ href: "/docs/from-nextjs", label: "From Next.js" }}
   next={{ href: "/docs/adapters", label: "Adapters" }}
 >
   <h2 id="compiler"><code>bangala</code></h2>

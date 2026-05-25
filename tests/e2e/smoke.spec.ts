@@ -10,6 +10,8 @@ const pages = [
   { path: '/docs/routing', title: /Routing/i },
   { path: '/docs/layouts', title: /Layouts/i },
   { path: '/docs/static-generation', title: /Static Generation/i },
+  { path: '/docs/examples', title: /Examples/i },
+  { path: '/docs/from-nextjs', title: /From Next\.js/i },
   { path: '/docs/api', title: /API Reference/i },
   { path: '/docs/adapters', title: /Adapters/i },
   { path: '/play', title: /Playground/i },
@@ -37,4 +39,11 @@ test('docs search opens with keyboard shortcut and filters results', async ({ pa
   await expect(page.locator('.docs-search-panel')).toBeVisible();
   await page.locator('.docs-search-field input').fill('layout');
   await expect(page.locator('.docs-search-result', { hasText: 'Layouts' })).toBeVisible();
+});
+
+test('docs search includes guides', async ({ page }) => {
+  await page.goto('/docs');
+  await page.keyboard.press('Control+K');
+  await page.locator('.docs-search-field input').fill('next');
+  await expect(page.locator('.docs-search-result', { hasText: 'From Next.js' })).toBeVisible();
 });

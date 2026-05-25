@@ -30,7 +30,7 @@ const headings = [
   lead="Bangala builds static HTML first. Static routes are included automatically; dynamic routes opt in with getStaticPaths()."
   headings={headings}
   prev={{ href: "/docs/layouts", label: "Layouts" }}
-  next={{ href: "/docs/api", label: "API Reference" }}
+  next={{ href: "/docs/examples", label: "Examples" }}
 >
   <h2 id="static-routes">Static routes</h2>
   <p>Every route without dynamic segments is prerendered by <code>bangala build</code>.</p>

@@ -1,0 +1,98 @@
+---
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+
+const layout = [
+  "---",
+  'const { title = "My site" } = props',
+  "---",
+  "<!DOCTYPE html>",
+  "<html>",
+  "  <head><title>{title}</title></head>",
+  "  <body><slot/></body>",
+  "</html>",
+].join("\n");
+
+const page = [
+  "---",
+  "const posts = await getPosts();",
+  "---",
+  "<h1>Blog</h1>",
+  "<ul>",
+  "  {#each posts as post}",
+  "    <li><a href={'/blog/' + post.slug}>{post.title}</a></li>",
+  "  {/each}",
+  "</ul>",
+].join("\n");
+
+const staticParams = [
+  "---",
+  "export async function getStaticPaths() {",
+  "  return [",
+  '    { params: { slug: "hello" } },',
+  '    { params: { slug: "world" } },',
+  "  ];",
+  "}",
+  "---",
+  "<h1>{props.params.slug}</h1>",
+].join("\n");
+
+const island = [
+  "---",
+  'import SearchBox from "../components/SearchBox.bangala"',
+  "---",
+  "<SearchBox client:load />",
+].join("\n");
+
+const headings = [
+  { id: "mapping", label: "Concept mapping" },
+  { id: "layouts", label: "Layouts" },
+  { id: "pages", label: "Pages" },
+  { id: "static-params", label: "Static params" },
+  { id: "client-components", label: "Client components" },
+  { id: "tradeoffs", label: "Tradeoffs" },
+];
+---
+<DocsLayout
+  title="From Next.js | bangala.js"
+  description="Guide de migration conceptuelle depuis Next.js vers Bangala."
+  path="/docs/from-nextjs"
+  section="Guides"
+  lead="If you know Next.js, the routing ideas will feel familiar. The main difference is the runtime: Bangala starts from HTML and asks you to opt into JavaScript."
+  headings={headings}
+  prev={{ href: "/docs/examples", label: "Examples" }}
+  next={{ href: "/docs/api", label: "API Reference" }}
+>
+  <h2 id="mapping">Concept mapping</h2>
+  <table class="docs-table">
+    <thead><tr><th>Next.js concept</th><th>Bangala equivalent</th><th>Difference</th></tr></thead>
+    <tbody>
+      <tr><td><code>app/page.tsx</code></td><td><code>pages/index.bangala</code></td><td>HTML-first template, no JSX.</td></tr>
+      <tr><td><code>app/layout.tsx</code></td><td><code>pages/_layout.bangala</code></td><td>Uses <code>&lt;slot/&gt;</code> for children.</td></tr>
+      <tr><td><code>[slug]</code></td><td><code>[slug]</code></td><td>Same file naming idea.</td></tr>
+      <tr><td><code>generateStaticParams()</code></td><td><code>getStaticPaths()</code></td><td>Returns <code>&#123; params &#125;</code> entries.</td></tr>
+      <tr><td><code>"use client"</code></td><td><code>client:load</code> / <code>client:idle</code> / <code>client:visible</code></td><td>Hydration is per component and per strategy.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="layouts">Layouts</h2>
+  <p>Bangala layouts are route wrappers. They are regular <code>.bangala</code> files and can include full document markup.</p>
+  <CodeBlock filename="pages/_layout.bangala" code={layout}/>
+
+  <h2 id="pages">Pages</h2>
+  <p>Instead of JSX, write HTML with frontmatter. Data fetching happens in the frontmatter during render.</p>
+  <CodeBlock filename="pages/blog/index.bangala" code={page}/>
+
+  <h2 id="static-params">Static params</h2>
+  <p>Use <code>getStaticPaths()</code> when a dynamic route should be generated at build time.</p>
+  <CodeBlock filename="pages/blog/[slug].bangala" code={staticParams}/>
+
+  <h2 id="client-components">Client components</h2>
+  <p>Bangala does not make whole subtrees client-side. Mark the exact component that needs browser behavior.</p>
+  <CodeBlock filename="pages/search.bangala" code={island}/>
+
+  <h2 id="tradeoffs">Tradeoffs</h2>
+  <div class="docs-callout">
+    <p><strong>Choose Bangala when</strong> the page is mostly content, SEO matters, and JavaScript should be budgeted explicitly. Choose Next.js when the product is fundamentally a React app and the React runtime is part of the architecture.</p>
+  </div>
+</DocsLayout>

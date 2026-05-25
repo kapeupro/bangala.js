@@ -51,5 +51,5 @@ const headings = [
   <CodeBlock filename="pages/index.bangala" code={firstPage}/>
 
   <h2 id="start-here">Start here</h2>
-  <p>New project? Start with <a href="/docs/installation">Installation</a>. Learning the file format? Read <a href="/docs/syntax">.bangala syntax</a>. Building a site with shared chrome? Jump to <a href="/docs/layouts">Layouts</a> and <a href="/docs/static-generation">Static Generation</a>.</p>
+  <p>New project? Start with <a href="/docs/installation">Installation</a>. Learning the file format? Read <a href="/docs/syntax">.bangala syntax</a>. Building a real site? Jump to <a href="/docs/examples">Examples</a>, <a href="/docs/layouts">Layouts</a>, and <a href="/docs/static-generation">Static Generation</a>.</p>
 </DocsLayout>
