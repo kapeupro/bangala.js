@@ -1,0 +1,16 @@
+---
+const {
+  items = [],
+} = props;
+---
+<ol class="docs-steps">
+  {#each items as item}
+    <li>
+      <span class="docs-step-index">{item.step}</span>
+      <div>
+        <strong>{item.title}</strong>
+        <p>{item.desc}</p>
+      </div>
+    </li>
+  {/each}
+</ol>

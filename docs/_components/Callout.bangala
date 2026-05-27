@@ -1,0 +1,14 @@
+---
+const {
+  title = "",
+  variant = "note",
+} = props;
+
+const className = "docs-callout docs-callout-" + variant;
+---
+<div class={className}>
+  {#if title}
+    <p class="docs-callout-title">{title}</p>
+  {/if}
+  <slot/>
+</div>

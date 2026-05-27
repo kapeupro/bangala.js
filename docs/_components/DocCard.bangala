@@ -1,0 +1,11 @@
+---
+const {
+  href = "#",
+  title = "",
+  desc = "",
+} = props;
+---
+<a class="docs-card" href={href}>
+  <strong>{title}</strong>
+  <span>{desc}</span>
+</a>

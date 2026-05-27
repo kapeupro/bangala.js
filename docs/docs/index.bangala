@@ -1,6 +1,9 @@
 ---
 import DocsLayout from "../_components/DocsLayout.bangala"
 import CodeBlock from "../_components/CodeBlock.bangala"
+import Callout from "../_components/Callout.bangala"
+import DocGrid from "../_components/DocGrid.bangala"
+import DocCard from "../_components/DocCard.bangala"
 
 const quickstart = `npm create bangala@latest my-site
 cd my-site
@@ -36,17 +39,17 @@ const headings = [
 
   <h2 id="why-not-next">Why not Next.js?</h2>
   <p>Next.js is excellent when you want the React platform. Bangala is for the other case: content-heavy sites, documentation, landing pages, blogs, and product pages where HTML should be the default and JavaScript should be an explicit decision.</p>
-  <div class="docs-callout">
-    <p><strong>Positioning:</strong> Bangala is not a Next.js clone. It competes by being smaller, more direct, and HTML-first. Routing, layouts, and static generation are familiar; the runtime model is intentionally lighter.</p>
-  </div>
+  <Callout title="Positioning">
+    <p>Bangala is not a Next.js clone. It competes by being smaller, more direct, and HTML-first. Routing, layouts, and static generation are familiar; the runtime model is intentionally lighter.</p>
+  </Callout>
 
   <h2 id="mental-model">Mental model</h2>
-  <div class="docs-grid">
-    <a class="docs-card" href="/docs/syntax"><strong>1. Write HTML-first pages</strong><span>Use frontmatter, expressions, conditionals, loops, components, and one default slot.</span></a>
-    <a class="docs-card" href="/docs/routing"><strong>2. Let files become routes</strong><span><code>pages/index.bangala</code>, <code>[slug]</code>, and <code>[...catchAll]</code> map to URLs.</span></a>
-    <a class="docs-card" href="/docs/layouts"><strong>3. Compose with layouts</strong><span>Use <code>_layout.bangala</code> files to wrap route trees, outermost first.</span></a>
-    <a class="docs-card" href="/docs/islands"><strong>4. Hydrate islands explicitly</strong><span>Only interactive components load client modules; static content stays static.</span></a>
-  </div>
+  <DocGrid>
+    <DocCard href="/docs/syntax" title="1. Write HTML-first pages" desc="Use frontmatter, expressions, conditionals, loops, components, and one default slot."/>
+    <DocCard href="/docs/routing" title="2. Let files become routes" desc="pages/index.bangala, [slug], and [...catchAll] map to URLs."/>
+    <DocCard href="/docs/layouts" title="3. Compose with layouts" desc="_layout.bangala files wrap route trees, outermost first."/>
+    <DocCard href="/docs/islands" title="4. Hydrate islands explicitly" desc="Only interactive components load client modules; static content stays static."/>
+  </DocGrid>
 
   <CodeBlock filename="pages/index.bangala" code={firstPage}/>
 

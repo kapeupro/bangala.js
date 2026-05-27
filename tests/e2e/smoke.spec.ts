@@ -6,6 +6,7 @@ const pages = [
   { path: '/docs/installation', title: /Installation/i },
   { path: '/docs/project-structure', title: /Project structure/i },
   { path: '/docs/syntax', title: /syntax/i },
+  { path: '/docs/components', title: /Components/i },
   { path: '/docs/islands', title: /Islands/i },
   { path: '/docs/routing', title: /Routing/i },
   { path: '/docs/layouts', title: /Layouts/i },
@@ -46,4 +47,11 @@ test('docs search includes guides', async ({ page }) => {
   await page.keyboard.press('Control+K');
   await page.locator('.docs-search-field input').fill('next');
   await expect(page.locator('.docs-search-result', { hasText: 'From Next.js' })).toBeVisible();
+});
+
+test('docs search includes components', async ({ page }) => {
+  await page.goto('/docs');
+  await page.keyboard.press('Control+K');
+  await page.locator('.docs-search-field input').fill('component');
+  await expect(page.locator('.docs-search-result', { hasText: 'Components' })).toBeVisible();
 });

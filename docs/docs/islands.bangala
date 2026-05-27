@@ -47,7 +47,7 @@ const headings = [
   section="Core Concepts"
   lead="Bangala renders everything to HTML first. Islands are the small pieces you explicitly wake up in the browser."
   headings={headings}
-  prev={{ href: "/docs/syntax", label: ".bangala syntax" }}
+  prev={{ href: "/docs/components", label: "Components" }}
   next={{ href: "/docs/routing", label: "File-based Routing" }}
 >
   <h2 id="model">Model</h2>

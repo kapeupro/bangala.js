@@ -1,6 +1,7 @@
 ---
 import DocsLayout from "../_components/DocsLayout.bangala"
 import CodeBlock from "../_components/CodeBlock.bangala"
+import Callout from "../_components/Callout.bangala"
 
 const anatomy = [
   "---",
@@ -53,7 +54,7 @@ const headings = [
   lead=".bangala is HTML with a small template layer. No JSX, no virtual DOM, no client runtime unless you mark an island."
   headings={headings}
   prev={{ href: "/docs/project-structure", label: "Project structure" }}
-  next={{ href: "/docs/islands", label: "Islands Architecture" }}
+  next={{ href: "/docs/components", label: "Components" }}
 >
   <h2 id="anatomy">Anatomy</h2>
   <p>A file has optional JavaScript frontmatter between <code>---</code> fences, followed by an HTML-first template body.</p>
@@ -64,9 +65,9 @@ const headings = [
 
   <h2 id="expressions">Expressions</h2>
   <p><code>{`{expression}`}</code> inserts a JavaScript expression into HTML and escapes the result. This protects text and attribute values from markup injection by default.</p>
-  <div class="docs-callout">
+  <Callout title="Escaping">
     <p>There is no raw HTML interpolation escape hatch in v1.0. If you need markup, write markup in the template rather than returning it from a string.</p>
-  </div>
+  </Callout>
 
   <h2 id="control-flow">Control flow</h2>
   <p>Use <code>{`{#if}`}</code>, <code>{`{:else}`}</code>, and <code>{`{#each}`}</code> for server-side branching and loops.</p>

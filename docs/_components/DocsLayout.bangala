@@ -14,6 +14,7 @@ const navGroups = [
     title: "Core Concepts",
     links: [
       { label: ".bangala syntax", href: "/docs/syntax", desc: "Frontmatter, HTML, slots" },
+      { label: "Components", href: "/docs/components", desc: "Props, slots, composition" },
       { label: "Islands Architecture", href: "/docs/islands", desc: "Explicit client JavaScript" },
       { label: "File-based Routing", href: "/docs/routing", desc: "Static, dynamic, catch-all" },
       { label: "Layouts", href: "/docs/layouts", desc: "Nested _layout.bangala shells" },
