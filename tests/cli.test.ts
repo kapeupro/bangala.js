@@ -60,6 +60,73 @@ describe("bangala CLI", () => {
     );
   });
 
+  it("scaffolds and builds a blog template", async () => {
+    const root = join(tmpRoot(), "blog-site");
+    const out: string[] = [];
+
+    const result = await createProject(root, {
+      packageVersion: "0.4.0",
+      template: "blog",
+    });
+
+    expect(result.files).toContain("pages/_layout.bangala");
+    expect(result.files).toContain("pages/blog/[slug].bangala");
+    expect(result.files).toContain("components/PostList.bangala");
+    await expect(readFile(join(root, "pages/blog/[slug].bangala"), "utf8")).resolves.toContain(
+      "getStaticPaths",
+    );
+
+    const code = await main(
+      ["build", "--root", root, "--out-dir", "_site"],
+      { stdout: (line) => out.push(line) },
+    );
+
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("built 4 page(s)");
+    await expect(readFile(join(root, "_site/blog/launch-notes/index.html"), "utf8")).resolves
+      .toContain("Launch notes");
+  });
+
+  it("selects the docs template through the CLI", async () => {
+    const root = tmpRoot();
+    const out: string[] = [];
+
+    const createCode = await main(
+      ["create", "docs-site", "--template", "docs"],
+      { cwd: root, stdout: (line) => out.push(line) },
+    );
+
+    expect(createCode).toBe(0);
+    expect(out.join("\n")).toContain("created docs-site");
+    await expect(readFile(join(root, "docs-site/pages/docs/_layout.bangala"), "utf8")).resolves
+      .toContain("Docs navigation");
+    await expect(readFile(join(root, "docs-site/pages/docs/[slug].bangala"), "utf8")).resolves
+      .toContain("getStaticPaths");
+
+    const buildCode = await main(
+      ["build", "--root", join(root, "docs-site"), "--out-dir", "_site"],
+      { stdout: (line) => out.push(line) },
+    );
+
+    expect(buildCode).toBe(0);
+    expect(out.join("\n")).toContain("built 5 page(s)");
+    await expect(readFile(join(root, "docs-site/_site/docs/deployment/index.html"), "utf8"))
+      .resolves.toContain("Deployment");
+  });
+
+  it("rejects unknown create templates", async () => {
+    const root = tmpRoot();
+    const err: string[] = [];
+
+    const code = await main(
+      ["create", "site", "--template", "shop"],
+      { cwd: root, stderr: (line) => err.push(line) },
+    );
+
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("Available templates: starter, blog, docs");
+  });
+
   it("configures a deploy adapter through the CLI", async () => {
     const root = tmpRoot();
     const out: string[] = [];

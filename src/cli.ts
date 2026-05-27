@@ -27,11 +27,14 @@ export interface CliIO {
   stderr?: (message: string) => void;
 }
 
+export type CreateProjectTemplate = "starter" | "blog" | "docs";
+
 export interface CreateProjectOptions {
   force?: boolean;
   name?: string;
   adapter?: string | false;
   packageVersion?: string;
+  template?: CreateProjectTemplate | "basic";
 }
 
 interface ParsedArgs {
@@ -42,6 +45,7 @@ interface ParsedArgs {
 
 const VERSION = readPackageVersion();
 const DEFAULT_PORT = 5173;
+const CREATE_TEMPLATES = ["starter", "blog", "docs"] as const;
 
 export async function main(
   argv = process.argv.slice(2),
@@ -95,6 +99,7 @@ export async function createProject(
   const name = packageName(options.name ?? (basename(projectRoot) || "bangala-app"));
   const version = options.packageVersion ?? VERSION;
   const force = options.force ?? false;
+  const template = normalizeTemplate(options.template);
 
   if (existsSync(projectRoot) && !force) {
     const entries = await readdir(projectRoot);
@@ -103,7 +108,7 @@ export async function createProject(
     }
   }
 
-  const files = templateFiles(name, version);
+  const files = templateFiles(name, version, template);
   for (const file of files) {
     await writeProjectFile(projectRoot, file.path, file.contents, force);
   }
@@ -240,16 +245,13 @@ async function runCreate(args: string[], io: CliIO): Promise<void> {
     return;
   }
 
-  const template = option(parsed, "template") ?? "basic";
-  if (template !== "basic") {
-    throw new Error(`Unknown template '${template}'. Available templates: basic`);
-  }
-
+  const template = normalizeTemplate(option(parsed, "template"));
   const target = parsed.positionals[0] ?? "bangala-app";
   const projectRoot = resolve(io.cwd ?? process.cwd(), target);
   const result = await createProject(projectRoot, {
     force: parsed.booleans.has("force"),
     adapter: option(parsed, "adapter") ?? false,
+    template,
   });
 
   const displayPath = relative(io.cwd ?? process.cwd(), result.root) || ".";
@@ -374,6 +376,17 @@ function openBrowser(url: string): void {
   }
 }
 
+function normalizeTemplate(value: string | undefined): CreateProjectTemplate {
+  const template = value ?? "starter";
+  if (template === "basic") return "starter";
+  if ((CREATE_TEMPLATES as readonly string[]).includes(template)) {
+    return template as CreateProjectTemplate;
+  }
+  throw new Error(
+    `Unknown template '${template}'. Available templates: ${CREATE_TEMPLATES.join(", ")}`,
+  );
+}
+
 async function writeProjectFile(
   root: string,
   file: string,
@@ -388,7 +401,14 @@ async function writeProjectFile(
   await writeFile(full, contents);
 }
 
-function templateFiles(name: string, version: string): { path: string; contents: string }[] {
+function templateFiles(
+  name: string,
+  version: string,
+  template: CreateProjectTemplate,
+): { path: string; contents: string }[] {
+  if (template === "blog") return blogTemplateFiles(name, version);
+  if (template === "docs") return docsTemplateFiles(name, version);
+
   return [
     {
       path: "package.json",
@@ -564,6 +584,491 @@ function templateFiles(name: string, version: string): { path: string; contents:
   ];
 }
 
+function blogTemplateFiles(name: string, version: string): { path: string; contents: string }[] {
+  return [
+    {
+      path: "package.json",
+      contents: `${JSON.stringify({
+        name,
+        version: "0.0.0",
+        private: true,
+        type: "module",
+        scripts: {
+          dev: "bangala dev",
+          build: "bangala build --out-dir _site",
+          preview: "bangala build --out-dir _site && npx serve _site",
+        },
+        dependencies: {
+          bangala: `^${version}`,
+        },
+        devDependencies: {
+          vite: "^7.3.3",
+        },
+      }, null, 2)}\n`,
+    },
+    {
+      path: "pages/_layout.bangala",
+      contents:
+        `---\n` +
+        `const siteTitle = "Field Notes"\n` +
+        `const nav = [\n` +
+        `  { href: "/", label: "Home" },\n` +
+        `  { href: "/blog/launch-notes", label: "Latest" },\n` +
+        `]\n` +
+        `---\n` +
+        `<!doctype html>\n` +
+        `<html lang="en">\n` +
+        `<head>\n` +
+        `  <meta charset="utf-8"/>\n` +
+        `  <meta name="viewport" content="width=device-width, initial-scale=1"/>\n` +
+        `  <title>{siteTitle}</title>\n` +
+        `  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>\n` +
+        `  <link rel="stylesheet" href="/styles.css"/>\n` +
+        `</head>\n` +
+        `<body>\n` +
+        `  <header class="site-header">\n` +
+        `    <a class="brand" href="/">{siteTitle}</a>\n` +
+        `    <nav aria-label="Main navigation">\n` +
+        `      {#each nav as item}<a href={item.href}>{item.label}</a>{/each}\n` +
+        `    </nav>\n` +
+        `  </header>\n` +
+        `  <slot/>\n` +
+        `  <footer class="site-footer">Built with bangala.js. Static by default, interactive by choice.</footer>\n` +
+        `</body>\n` +
+        `</html>\n`,
+    },
+    {
+      path: "pages/index.bangala",
+      contents:
+        `---\n` +
+        `import PostList from "../components/PostList.bangala"\n` +
+        `const posts = [\n` +
+        `  { slug: "launch-notes", title: "Launch notes", date: "2026-05-27", excerpt: "A short dispatch on shipping a fast content site with almost no client JavaScript." },\n` +
+        `  { slug: "content-pipeline", title: "A tiny content pipeline", date: "2026-05-20", excerpt: "Use plain data in frontmatter, dynamic routes, and static generation for editorial pages." },\n` +
+        `  { slug: "islands-for-writers", title: "Islands for writers", date: "2026-05-13", excerpt: "Keep essays static and reserve hydration for the few controls that need it." },\n` +
+        `]\n` +
+        `const featured = posts[0]\n` +
+        `---\n` +
+        `<main>\n` +
+        `  <section class="hero">\n` +
+        `    <p class="eyebrow">Bangala blog template</p>\n` +
+        `    <h1>Write, publish, and keep the page light.</h1>\n` +
+        `    <p class="lede">A realistic starter for notes, changelogs, and product essays with file-based routes and generated post pages.</p>\n` +
+        `    <a class="button" href={"/blog/" + featured.slug}>Read {featured.title}</a>\n` +
+        `  </section>\n` +
+        `  <PostList posts={posts}/>\n` +
+        `</main>\n`,
+    },
+    {
+      path: "pages/blog/[slug].bangala",
+      contents:
+        `---\n` +
+        `export function getPosts() {\n` +
+        `  return [\n` +
+        `    {\n` +
+        `      slug: "launch-notes",\n` +
+        `      title: "Launch notes",\n` +
+        `      date: "2026-05-27",\n` +
+        `      excerpt: "A short dispatch on shipping a fast content site with almost no client JavaScript.",\n` +
+        `      sections: [\n` +
+        `        { heading: "Static first", body: "Bangala prerenders this post from getStaticPaths, so the route can ship as plain HTML." },\n` +
+        `        { heading: "Add islands when needed", body: "Interactive controls can live in public/islands and hydrate only where a page asks for them." },\n` +
+        `      ],\n` +
+        `    },\n` +
+        `    {\n` +
+        `      slug: "content-pipeline",\n` +
+        `      title: "A tiny content pipeline",\n` +
+        `      date: "2026-05-20",\n` +
+        `      excerpt: "Use plain data in frontmatter, dynamic routes, and static generation for editorial pages.",\n` +
+        `      sections: [\n` +
+        `        { heading: "Data close to the route", body: "This template keeps starter content in the route file so the generated project is easy to understand." },\n` +
+        `        { heading: "Move when it grows", body: "When the site grows, move the same shape into JSON or a small content loader." },\n` +
+        `      ],\n` +
+        `    },\n` +
+        `    {\n` +
+        `      slug: "islands-for-writers",\n` +
+        `      title: "Islands for writers",\n` +
+        `      date: "2026-05-13",\n` +
+        `      excerpt: "Keep essays static and reserve hydration for the few controls that need it.",\n` +
+        `      sections: [\n` +
+        `        { heading: "Start with markup", body: "Most writing pages do not need a client runtime beyond analytics or a few optional widgets." },\n` +
+        `        { heading: "Hydrate deliberately", body: "Use bangala-island markers for comments, filters, or demos that truly need browser state." },\n` +
+        `      ],\n` +
+        `    },\n` +
+        `  ]\n` +
+        `}\n` +
+        `export async function getStaticPaths() {\n` +
+        `  return getPosts().map((post) => ({ params: { slug: post.slug } }))\n` +
+        `}\n` +
+        `const posts = getPosts()\n` +
+        `const post = posts.find((entry) => entry.slug === props.params.slug) ?? posts[0]\n` +
+        `---\n` +
+        `<main>\n` +
+        `  <article class="post">\n` +
+        `    <a class="back-link" href="/">Back to all posts</a>\n` +
+        `    <p class="eyebrow"><time datetime={post.date}>{post.date}</time></p>\n` +
+        `    <h1>{post.title}</h1>\n` +
+        `    <p class="lede">{post.excerpt}</p>\n` +
+        `    {#each post.sections as section}\n` +
+        `      <section class="post-section">\n` +
+        `        <h2>{section.heading}</h2>\n` +
+        `        <p>{section.body}</p>\n` +
+        `      </section>\n` +
+        `    {/each}\n` +
+        `  </article>\n` +
+        `</main>\n`,
+    },
+    {
+      path: "components/PostList.bangala",
+      contents:
+        `---\n` +
+        `const posts = props.posts ?? []\n` +
+        `---\n` +
+        `<section class="post-list" aria-labelledby="latest-posts">\n` +
+        `  <div class="section-heading">\n` +
+        `    <p class="eyebrow">Latest</p>\n` +
+        `    <h2 id="latest-posts">Recent posts</h2>\n` +
+        `  </div>\n` +
+        `  <div class="cards">\n` +
+        `    {#each posts as post}\n` +
+        `      <article class="post-card">\n` +
+        `        <time datetime={post.date}>{post.date}</time>\n` +
+        `        <h3><a href={"/blog/" + post.slug}>{post.title}</a></h3>\n` +
+        `        <p>{post.excerpt}</p>\n` +
+        `      </article>\n` +
+        `    {/each}\n` +
+        `  </div>\n` +
+        `</section>\n`,
+    },
+    {
+      path: "public/favicon.svg",
+      contents: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Field Notes"><rect width="64" height="64" rx="14" fill="#111827"/><path d="M18 18h28v28H18z" fill="#f97316"/><path d="M24 25h16M24 32h16M24 39h10" stroke="#111827" stroke-width="3" stroke-linecap="round"/></svg>\n`,
+    },
+    {
+      path: "public/styles.css",
+      contents:
+        `:root {\n` +
+        `  color-scheme: light;\n` +
+        `  --bg: #f8fafc;\n` +
+        `  --fg: #111827;\n` +
+        `  --muted: #64748b;\n` +
+        `  --accent: #f97316;\n` +
+        `  --panel: #ffffff;\n` +
+        `  --border: #e2e8f0;\n` +
+        `  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;\n` +
+        `  background: var(--bg);\n` +
+        `  color: var(--fg);\n` +
+        `}\n` +
+        `* { box-sizing: border-box; }\n` +
+        `body { margin: 0; min-height: 100vh; }\n` +
+        `a { color: inherit; }\n` +
+        `.site-header, main, .site-footer { width: min(1040px, calc(100% - 32px)); margin-inline: auto; }\n` +
+        `.site-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 24px 0; }\n` +
+        `.brand { font-weight: 800; text-decoration: none; }\n` +
+        `nav { display: flex; gap: 16px; color: var(--muted); }\n` +
+        `nav a { text-decoration: none; font-weight: 650; }\n` +
+        `.hero { padding: 72px 0 52px; max-width: 760px; }\n` +
+        `.eyebrow { margin: 0 0 12px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }\n` +
+        `h1 { margin: 0; font-size: clamp(42px, 8vw, 80px); line-height: 0.98; }\n` +
+        `.lede { color: var(--muted); font-size: 20px; line-height: 1.6; margin: 22px 0 0; }\n` +
+        `.button { display: inline-flex; margin-top: 28px; padding: 12px 18px; border-radius: 8px; background: var(--fg); color: white; text-decoration: none; font-weight: 750; }\n` +
+        `.section-heading { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 18px; }\n` +
+        `.section-heading h2 { margin: 0; font-size: 28px; }\n` +
+        `.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }\n` +
+        `.post-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 22px; }\n` +
+        `.post-card time, .site-footer { color: var(--muted); font-size: 14px; }\n` +
+        `.post-card h3 { margin: 10px 0; font-size: 22px; }\n` +
+        `.post-card p { color: var(--muted); line-height: 1.55; margin: 0; }\n` +
+        `.post { max-width: 760px; padding: 48px 0 72px; }\n` +
+        `.back-link { color: var(--muted); font-weight: 700; text-decoration: none; }\n` +
+        `.post-section { margin-top: 36px; }\n` +
+        `.post-section h2 { font-size: 26px; margin: 0 0 10px; }\n` +
+        `.post-section p { color: var(--muted); font-size: 18px; line-height: 1.7; margin: 0; }\n` +
+        `.site-footer { padding: 56px 0 32px; }\n` +
+        `@media (max-width: 640px) { .site-header { align-items: flex-start; flex-direction: column; } .hero { padding-top: 40px; } }\n`,
+    },
+    {
+      path: "README.md",
+      contents:
+        `# ${name}\n` +
+        `\n` +
+        `A blog starter built with [bangala.js](https://github.com/kapeupro/bangala). It includes a home page, generated post routes, a shared layout, and componentized post cards.\n` +
+        `\n` +
+        `## Run locally\n` +
+        `\n` +
+        `\`\`\`sh\n` +
+        `npm install\n` +
+        `npm run dev\n` +
+        `\`\`\`\n` +
+        `\n` +
+        `## Content map\n` +
+        `\n` +
+        `- \`pages/index.bangala\` lists posts and highlights the latest entry.\n` +
+        `- \`pages/blog/[slug].bangala\` owns the starter post data and exports \`getStaticPaths()\`.\n` +
+        `- \`pages/_layout.bangala\` wraps every route with the document shell.\n` +
+        `- \`components/PostList.bangala\` renders reusable post cards.\n` +
+        `\n` +
+        `Build output goes to \`_site/\`.\n`,
+    },
+    {
+      path: ".gitignore",
+      contents: `node_modules/\ndist/\n_site/\n.DS_Store\n`,
+    },
+  ];
+}
+
+function docsTemplateFiles(name: string, version: string): { path: string; contents: string }[] {
+  return [
+    {
+      path: "package.json",
+      contents: `${JSON.stringify({
+        name,
+        version: "0.0.0",
+        private: true,
+        type: "module",
+        scripts: {
+          dev: "bangala dev",
+          build: "bangala build --out-dir _site",
+          preview: "bangala build --out-dir _site && npx serve _site",
+        },
+        dependencies: {
+          bangala: `^${version}`,
+        },
+        devDependencies: {
+          vite: "^7.3.3",
+        },
+      }, null, 2)}\n`,
+    },
+    {
+      path: "pages/_layout.bangala",
+      contents:
+        `---\n` +
+        `const product = "Acme Docs"\n` +
+        `const nav = [\n` +
+        `  { href: "/", label: "Overview" },\n` +
+        `  { href: "/docs", label: "Docs" },\n` +
+        `  { href: "/docs/deployment", label: "Deploy" },\n` +
+        `]\n` +
+        `---\n` +
+        `<!doctype html>\n` +
+        `<html lang="en">\n` +
+        `<head>\n` +
+        `  <meta charset="utf-8"/>\n` +
+        `  <meta name="viewport" content="width=device-width, initial-scale=1"/>\n` +
+        `  <title>{product}</title>\n` +
+        `  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>\n` +
+        `  <link rel="stylesheet" href="/styles.css"/>\n` +
+        `</head>\n` +
+        `<body>\n` +
+        `  <header class="topbar">\n` +
+        `    <a class="brand" href="/">{product}</a>\n` +
+        `    <nav aria-label="Main navigation">\n` +
+        `      {#each nav as item}<a href={item.href}>{item.label}</a>{/each}\n` +
+        `    </nav>\n` +
+        `  </header>\n` +
+        `  <slot/>\n` +
+        `</body>\n` +
+        `</html>\n`,
+    },
+    {
+      path: "pages/index.bangala",
+      contents:
+        `---\n` +
+        `const highlights = [\n` +
+        `  { title: "Install", body: "Start with a small static site and add routes as the product grows.", href: "/docs/getting-started" },\n` +
+        `  { title: "Structure", body: "Use layouts, dynamic docs pages, and shared CSS without extra runtime code.", href: "/docs/project-structure" },\n` +
+        `  { title: "Deploy", body: "Build to a static directory that can go to any CDN or static host.", href: "/docs/deployment" },\n` +
+        `]\n` +
+        `---\n` +
+        `<main class="home">\n` +
+        `  <section class="hero">\n` +
+        `    <p class="eyebrow">Docs template</p>\n` +
+        `    <h1>Ship a clear documentation site without hauling a framework to every page.</h1>\n` +
+        `    <p class="lede">This scaffold includes an overview, a docs index, nested layouts, and statically generated article routes.</p>\n` +
+        `    <a class="button" href="/docs">Browse docs</a>\n` +
+        `  </section>\n` +
+        `  <section class="feature-grid" aria-label="Documentation highlights">\n` +
+        `    {#each highlights as item}\n` +
+        `      <article class="feature-card">\n` +
+        `        <h2><a href={item.href}>{item.title}</a></h2>\n` +
+        `        <p>{item.body}</p>\n` +
+        `      </article>\n` +
+        `    {/each}\n` +
+        `  </section>\n` +
+        `</main>\n`,
+    },
+    {
+      path: "pages/docs/_layout.bangala",
+      contents:
+        `---\n` +
+        `const items = [\n` +
+        `  { href: "/docs/getting-started", label: "Getting started" },\n` +
+        `  { href: "/docs/project-structure", label: "Project structure" },\n` +
+        `  { href: "/docs/deployment", label: "Deployment" },\n` +
+        `]\n` +
+        `---\n` +
+        `<div class="docs-shell">\n` +
+        `  <aside class="docs-sidebar" aria-label="Docs navigation">\n` +
+        `    <a class="docs-index" href="/docs">Documentation</a>\n` +
+        `    {#each items as item}<a href={item.href}>{item.label}</a>{/each}\n` +
+        `  </aside>\n` +
+        `  <main class="docs-content"><slot/></main>\n` +
+        `</div>\n`,
+    },
+    {
+      path: "pages/docs/index.bangala",
+      contents:
+        `---\n` +
+        `const entries = [\n` +
+        `  { href: "/docs/getting-started", title: "Getting started", body: "Install dependencies and run the local dev server." },\n` +
+        `  { href: "/docs/project-structure", title: "Project structure", body: "Learn where pages, layouts, components, and public assets live." },\n` +
+        `  { href: "/docs/deployment", title: "Deployment", body: "Build a static site and publish the generated output." },\n` +
+        `]\n` +
+        `---\n` +
+        `<section class="docs-intro">\n` +
+        `  <p class="eyebrow">Start here</p>\n` +
+        `  <h1>Documentation</h1>\n` +
+        `  <p class="lede">A small but complete docs structure for a product, library, or internal tool.</p>\n` +
+        `</section>\n` +
+        `<section class="doc-list">\n` +
+        `  {#each entries as entry}\n` +
+        `    <article class="doc-card">\n` +
+        `      <h2><a href={entry.href}>{entry.title}</a></h2>\n` +
+        `      <p>{entry.body}</p>\n` +
+        `    </article>\n` +
+        `  {/each}\n` +
+        `</section>\n`,
+    },
+    {
+      path: "pages/docs/[slug].bangala",
+      contents:
+        `---\n` +
+        `export function getPages() {\n` +
+        `  return [\n` +
+        `    {\n` +
+        `      slug: "getting-started",\n` +
+        `      title: "Getting started",\n` +
+        `      description: "Install the project and run the Bangala dev server.",\n` +
+        `      sections: [\n` +
+        `        { id: "install", title: "Install", body: "Run npm install, then start the local server with npm run dev." },\n` +
+        `        { id: "edit", title: "Edit content", body: "Change files under pages and components. The dev server reloads rendered HTML as you work." },\n` +
+        `      ],\n` +
+        `    },\n` +
+        `    {\n` +
+        `      slug: "project-structure",\n` +
+        `      title: "Project structure",\n` +
+        `      description: "Understand how this documentation template is organized.",\n` +
+        `      sections: [\n` +
+        `        { id: "pages", title: "Pages", body: "Route files live in pages. The docs folder adds a nested layout for article navigation." },\n` +
+        `        { id: "assets", title: "Assets", body: "Static files live in public and are served from the site root." },\n` +
+        `      ],\n` +
+        `    },\n` +
+        `    {\n` +
+        `      slug: "deployment",\n` +
+        `      title: "Deployment",\n` +
+        `      description: "Build static output for any CDN or static host.",\n` +
+        `      sections: [\n` +
+        `        { id: "build", title: "Build", body: "npm run build writes prerendered HTML and the optional client runtime to _site." },\n` +
+        `        { id: "publish", title: "Publish", body: "Upload _site to Netlify, Vercel, Cloudflare Pages, or any static file server." },\n` +
+        `      ],\n` +
+        `    },\n` +
+        `  ]\n` +
+        `}\n` +
+        `export async function getStaticPaths() {\n` +
+        `  return getPages().map((page) => ({ params: { slug: page.slug } }))\n` +
+        `}\n` +
+        `const pages = getPages()\n` +
+        `const page = pages.find((entry) => entry.slug === props.params.slug) ?? pages[0]\n` +
+        `---\n` +
+        `<article class="doc-article">\n` +
+        `  <p class="eyebrow">Guide</p>\n` +
+        `  <h1>{page.title}</h1>\n` +
+        `  <p class="lede">{page.description}</p>\n` +
+        `  {#each page.sections as section}\n` +
+        `    <section class="doc-section" id={section.id}>\n` +
+        `      <h2>{section.title}</h2>\n` +
+        `      <p>{section.body}</p>\n` +
+        `    </section>\n` +
+        `  {/each}\n` +
+        `</article>\n`,
+    },
+    {
+      path: "public/favicon.svg",
+      contents: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Docs"><rect width="64" height="64" rx="12" fill="#0f172a"/><path d="M20 14h18l8 8v28H20z" fill="#38bdf8"/><path d="M38 14v10h8M26 32h14M26 39h14M26 46h9" stroke="#0f172a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>\n`,
+    },
+    {
+      path: "public/styles.css",
+      contents:
+        `:root {\n` +
+        `  color-scheme: light;\n` +
+        `  --bg: #ffffff;\n` +
+        `  --fg: #111827;\n` +
+        `  --muted: #64748b;\n` +
+        `  --accent: #0284c7;\n` +
+        `  --panel: #f8fafc;\n` +
+        `  --border: #e5e7eb;\n` +
+        `  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;\n` +
+        `  background: var(--bg);\n` +
+        `  color: var(--fg);\n` +
+        `}\n` +
+        `* { box-sizing: border-box; }\n` +
+        `body { margin: 0; min-height: 100vh; }\n` +
+        `a { color: inherit; }\n` +
+        `.topbar { height: 64px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 max(24px, calc((100vw - 1120px) / 2)); }\n` +
+        `.brand { font-weight: 850; text-decoration: none; }\n` +
+        `nav { display: flex; gap: 16px; color: var(--muted); font-size: 14px; font-weight: 700; }\n` +
+        `nav a, .docs-sidebar a, .button { text-decoration: none; }\n` +
+        `.home { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }\n` +
+        `.hero { padding: 72px 0 48px; max-width: 860px; }\n` +
+        `.eyebrow { margin: 0 0 12px; color: var(--accent); font-size: 12px; font-weight: 850; letter-spacing: 0.12em; text-transform: uppercase; }\n` +
+        `h1 { margin: 0; font-size: clamp(40px, 7vw, 72px); line-height: 1; }\n` +
+        `.lede { color: var(--muted); font-size: 20px; line-height: 1.6; margin: 20px 0 0; }\n` +
+        `.button { display: inline-flex; margin-top: 28px; border-radius: 8px; background: var(--fg); color: white; padding: 12px 18px; font-weight: 800; }\n` +
+        `.feature-grid, .doc-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; padding-bottom: 64px; }\n` +
+        `.feature-card, .doc-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 22px; }\n` +
+        `.feature-card h2, .doc-card h2 { font-size: 20px; margin: 0 0 10px; }\n` +
+        `.feature-card p, .doc-card p, .doc-section p { color: var(--muted); line-height: 1.65; margin: 0; }\n` +
+        `.docs-shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 40px; padding: 40px 0 72px; }\n` +
+        `.docs-sidebar { position: sticky; top: 88px; align-self: start; display: grid; gap: 8px; border-right: 1px solid var(--border); padding-right: 24px; }\n` +
+        `.docs-sidebar a { color: var(--muted); font-weight: 700; padding: 8px 0; }\n` +
+        `.docs-sidebar .docs-index { color: var(--fg); }\n` +
+        `.docs-content { min-width: 0; }\n` +
+        `.docs-intro, .doc-article { max-width: 760px; }\n` +
+        `.docs-intro { margin-bottom: 28px; }\n` +
+        `.doc-section { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border); }\n` +
+        `.doc-section h2 { margin: 0 0 10px; font-size: 26px; }\n` +
+        `@media (max-width: 760px) { .topbar { height: auto; align-items: flex-start; flex-direction: column; padding-block: 18px; } .docs-shell { grid-template-columns: 1fr; } .docs-sidebar { position: static; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 0 18px; } }\n`,
+    },
+    {
+      path: "README.md",
+      contents:
+        `# ${name}\n` +
+        `\n` +
+        `A documentation starter built with [bangala.js](https://github.com/kapeupro/bangala). It includes nested docs layouts, an index, and generated article routes.\n` +
+        `\n` +
+        `## Run locally\n` +
+        `\n` +
+        `\`\`\`sh\n` +
+        `npm install\n` +
+        `npm run dev\n` +
+        `\`\`\`\n` +
+        `\n` +
+        `## Structure\n` +
+        `\n` +
+        `- \`pages/_layout.bangala\` is the site shell.\n` +
+        `- \`pages/docs/_layout.bangala\` adds the documentation sidebar.\n` +
+        `- \`pages/docs/[slug].bangala\` exports \`getStaticPaths()\` for static article pages.\n` +
+        `- \`public/styles.css\` contains the complete starter styling.\n` +
+        `\n` +
+        `Build output goes to \`_site/\`.\n`,
+    },
+    {
+      path: ".gitignore",
+      contents: `node_modules/\ndist/\n_site/\n.DS_Store\n`,
+    },
+  ];
+}
+
 function packageName(value: string): string {
   return value
     .trim()
@@ -579,13 +1084,13 @@ function helpText(): string {
     "Usage:",
     "  bangala dev [--root DIR] [--pages DIR] [--host HOST] [--port PORT] [--open]",
     "  bangala build [--root DIR] [--pages DIR] [--out-dir DIR] [--prerender PATH]",
-    "  bangala create [DIR] [--adapter NAME] [--force]",
+    "  bangala create [DIR] [--template starter|blog|docs] [--adapter NAME] [--force]",
     "  bangala deploy <adapter> [--root DIR] [--out-dir DIR] [--force]",
     "",
     "Commands:",
     "  dev       Start the Vite-powered Bangala dev server",
     "  build     Prerender pages and bundle the client runtime",
-    "  create    Scaffold a minimal Bangala project",
+    "  create    Scaffold a Bangala project",
     "  deploy    Write deployment config for static hosts",
   ].join("\n");
 }
@@ -625,7 +1130,7 @@ function createHelpText(): string {
     "Usage: bangala create [dir] [options]",
     "",
     "Options:",
-    "  --template basic       Template to use (default: basic)",
+    "  --template NAME        Template: starter, blog, docs (default: starter)",
     "  --adapter NAME         Also configure a deploy adapter",
     "  --force                Allow writing into a non-empty directory",
   ].join("\n");

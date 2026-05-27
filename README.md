@@ -53,7 +53,7 @@ Requires Node.js 22 or newer.
 **1. Create a project.**
 
 ```bash
-npx bangala create my-site --adapter netlify
+npx bangala create my-site --template blog --adapter netlify
 cd my-site
 npm install
 npm run dev
@@ -269,7 +269,8 @@ The package exposes a `bangala` binary:
 ```bash
 bangala dev --port 5173
 bangala build --out-dir dist --prerender /blog/first-post
-bangala create my-site --adapter netlify
+bangala create my-site --template starter
+bangala create docs-site --template docs --adapter netlify
 bangala deploy cloudflare-pages --force
 ```
 
