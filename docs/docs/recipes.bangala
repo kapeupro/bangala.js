@@ -1,0 +1,218 @@
+---
+import DocsLayout from "../_components/DocsLayout.bangala"
+import CodeBlock from "../_components/CodeBlock.bangala"
+import Callout from "../_components/Callout.bangala"
+import DocGrid from "../_components/DocGrid.bangala"
+import DocCard from "../_components/DocCard.bangala"
+import StepList from "../_components/StepList.bangala"
+
+const landingPage = [
+  "---",
+  "const features = [",
+  '  "Static HTML first",',
+  '  "Islands only where the page moves",',
+  '  "Deployable on any static host",',
+  "];",
+  "---",
+  '<main class="landing">',
+  '  <section class="hero">',
+  "    <p>Launch week</p>",
+  "    <h1>Ship a fast product page without a client app.</h1>",
+  "    <p>Bangala prerenders the page and keeps JavaScript explicit.</p>",
+  '    <a href="/docs/installation">Start building</a>',
+  "  </section>",
+  "",
+  '  <section class="features">',
+  "    {#each features as feature}",
+  "      <article>",
+  "        <strong>{feature}</strong>",
+  "      </article>",
+  "    {/each}",
+  "  </section>",
+  "</main>",
+].join("\n");
+
+const blogPost = [
+  "---",
+  "const posts = [",
+  '  { slug: "launch", title: "Launch notes", date: "2026-05-27", body: "What shipped and why it matters." },',
+  '  { slug: "performance", title: "Performance budget", date: "2026-05-28", body: "How we keep pages small." },',
+  "];",
+  "",
+  "export async function getStaticPaths() {",
+  "  return posts.map((post) => ({ params: { slug: post.slug } }));",
+  "}",
+  "",
+  "const post = posts.find((item) => item.slug === props.params.slug);",
+  "---",
+  "{#if post}",
+  '  <article class="post">',
+  "    <p>{post.date}</p>",
+  "    <h1>{post.title}</h1>",
+  "    <p>{post.body}</p>",
+  "  </article>",
+  "{/if}",
+].join("\n");
+
+const docsLayout = [
+  "---",
+  'const links = ["Getting started", "API", "Deploy"];',
+  "---",
+  '<div class="docs-shell">',
+  '  <aside class="docs-sidebar">',
+  "    <a href=\"/docs\">Docs</a>",
+  "    {#each links as link}",
+  "      <a href={'/docs/' + link.toLowerCase().replaceAll(' ', '-')}>{link}</a>",
+  "    {/each}",
+  "  </aside>",
+  '  <article class="docs-content">',
+  "    <slot/>",
+  "  </article>",
+  "</div>",
+].join("\n");
+
+const docsPage = [
+  "---",
+  "---",
+  "<h1>Getting started</h1>",
+  "<p>Install Bangala, create a page, and run the static build.</p>",
+  "<h2>Install</h2>",
+  "<pre><code>npm create bangala@latest my-docs</code></pre>",
+].join("\n");
+
+const newsletterPage = [
+  "---",
+  'const propsJson = JSON.stringify({ endpoint: "https://api.example.com/newsletter" });',
+  "---",
+  '<bangala-island data-entry="/islands/newsletter.js" data-props={propsJson} data-strategy="visible">',
+  '  <form class="newsletter" data-newsletter>',
+  '    <label for="email">Get launch notes</label>',
+  '    <input id="email" name="email" type="email" autocomplete="email" required />',
+  "    <button>Subscribe</button>",
+  '    <p data-status aria-live="polite"></p>',
+  "  </form>",
+  "</bangala-island>",
+].join("\n");
+
+const newsletterIsland = [
+  "export async function mount(el, props) {",
+  '  const form = el.querySelector("[data-newsletter]");',
+  '  const status = el.querySelector("[data-status]");',
+  "  if (!form || !status) return;",
+  "",
+  '  form.addEventListener("submit", async (event) => {',
+  "    event.preventDefault();",
+  '    status.textContent = "Subscribing...";',
+  "",
+  "    const body = new FormData(form);",
+  "    const res = await fetch(props.endpoint, { method: \"POST\", body });",
+  '    status.textContent = res.ok ? "Check your inbox." : "Try again in a minute.";',
+  "  });",
+  "}",
+].join("\n");
+
+const deployCommands = [
+  "npm run build",
+  "npx bangala deploy netlify",
+  "# or upload dist/ to any static host",
+].join("\n");
+
+const packageScripts = [
+  '{',
+  '  "scripts": {',
+  '    "build": "bangala build --out-dir dist",',
+  '    "preview": "npx serve dist",',
+  '    "check:budget": "node scripts/check-budget.mjs"',
+  "  }",
+  "}",
+].join("\n");
+
+const budgetScript = [
+  'import { readdir, stat } from "node:fs/promises";',
+  'import { join, extname } from "node:path";',
+  'import { fileURLToPath } from "node:url";',
+  "",
+  "const root = fileURLToPath(new URL(\"../dist/\", import.meta.url));",
+  "const limits = { \".html\": 30 * 1024, \".css\": 20 * 1024, \".js\": 15 * 1024 };",
+  "const failures = [];",
+  "",
+  "async function walk(dir) {",
+  "  for (const name of await readdir(dir)) {",
+  "    const file = join(dir, name);",
+  "    const info = await stat(file);",
+  "    if (info.isDirectory()) await walk(file);",
+  "    const limit = limits[extname(file)];",
+  "    if (limit && info.size > limit) failures.push(file + \" is \" + info.size + \" B over \" + limit + \" B\");",
+  "  }",
+  "}",
+  "",
+  "await walk(root);",
+  "if (failures.length) {",
+  "  console.error(failures.join(\"\\n\"));",
+  "  process.exit(1);",
+  "}",
+].join("\n");
+
+const deploySteps = [
+  { step: "01", title: "Build the site", desc: "Run the static build locally before configuring a host." },
+  { step: "02", title: "Pick the adapter", desc: "Use an adapter when a host needs config files, otherwise upload dist/." },
+  { step: "03", title: "Keep a budget check", desc: "Run the size guard in CI or before release so static pages stay small." },
+];
+
+const headings = [
+  { id: "landing-page", label: "Landing page" },
+  { id: "blog", label: "Blog" },
+  { id: "docs-site", label: "Docs site" },
+  { id: "newsletter-island", label: "Newsletter island" },
+  { id: "deploy", label: "Deploy" },
+  { id: "performance-budget", label: "Performance budget" },
+];
+---
+<DocsLayout
+  title="Recipes | bangala.js"
+  description="Recettes Bangala copy-paste pour landing page, blog, docs, island newsletter, deploy et budget de performance."
+  path="/docs/recipes"
+  section="Guides"
+  lead="Start from these small production-shaped recipes. They are meant to be copied, renamed, and trimmed to fit a real project."
+  headings={headings}
+  prev={{ href: "/docs/examples", label: "Examples" }}
+  next={{ href: "/docs/from-nextjs", label: "From Next.js" }}
+>
+  <DocGrid>
+    <DocCard href="#landing-page" title="Landing" desc="A no-JS marketing page with repeated features."/>
+    <DocCard href="#blog" title="Blog" desc="A dynamic route prerendered with getStaticPaths()."/>
+    <DocCard href="#docs-site" title="Docs" desc="A nested docs layout with a sidebar and content slot."/>
+    <DocCard href="#newsletter-island" title="Newsletter" desc="A small browser island around a static form."/>
+  </DocGrid>
+
+  <h2 id="landing-page">Landing page</h2>
+  <p>Use a plain page for product copy, feature lists, and calls to action. It prerenders to HTML and ships no browser code.</p>
+  <CodeBlock filename="pages/index.bangala" code={landingPage}/>
+
+  <h2 id="blog">Blog</h2>
+  <p>Put post data behind <code>getStaticPaths()</code> so every slug becomes a static file at build time.</p>
+  <CodeBlock filename="pages/blog/[slug].bangala" code={blogPost}/>
+
+  <h2 id="docs-site">Docs site</h2>
+  <p>A nested layout lets the docs tree keep its own sidebar while the root layout still owns the document shell.</p>
+  <CodeBlock filename="pages/docs/_layout.bangala" code={docsLayout}/>
+  <CodeBlock filename="pages/docs/index.bangala" code={docsPage}/>
+
+  <h2 id="newsletter-island">Newsletter island</h2>
+  <p>Render the form as HTML, then hydrate only the submit behavior. The static fallback still works if you keep a real <code>action</code> URL.</p>
+  <CodeBlock filename="pages/index.bangala" code={newsletterPage}/>
+  <CodeBlock filename="public/islands/newsletter.js" lang="js" code={newsletterIsland}/>
+
+  <h2 id="deploy">Deploy</h2>
+  <p>Bangala builds a static directory. Use an adapter when the host needs config, or upload <code>dist/</code> directly.</p>
+  <StepList items={deploySteps}/>
+  <CodeBlock filename="Terminal" lang="bash" code={deployCommands}/>
+
+  <h2 id="performance-budget">Performance budget</h2>
+  <p>Add a small size check next to your build script. Adjust the limits per project, then fail releases when pages drift upward.</p>
+  <Callout title="Budget rule" variant="info">
+    <p>Start strict enough to catch accidents: HTML around 30 kB, CSS around 20 kB, and island JavaScript around 15 kB per file.</p>
+  </Callout>
+  <CodeBlock filename="package.json" lang="json" code={packageScripts}/>
+  <CodeBlock filename="scripts/check-budget.mjs" lang="js" code={budgetScript}/>
+</DocsLayout>

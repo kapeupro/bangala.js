@@ -67,6 +67,12 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://bangala.eu/docs/recipes</loc>
+    <lastmod>2026-05-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://bangala.eu/docs/from-nextjs</loc>
     <lastmod>2026-05-25</lastmod>
     <changefreq>monthly</changefreq>

@@ -24,7 +24,8 @@ const navGroups = [
   {
     title: "Guides",
     links: [
-      { label: "Examples", href: "/docs/examples", desc: "Copyable recipes" },
+      { label: "Examples", href: "/docs/examples", desc: "Small building blocks" },
+      { label: "Recipes", href: "/docs/recipes", desc: "Landing, blog, docs, newsletter, deploy" },
       { label: "From Next.js", href: "/docs/from-nextjs", desc: "Map concepts to Bangala" },
     ],
   },

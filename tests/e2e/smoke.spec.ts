@@ -12,6 +12,7 @@ const pages = [
   { path: '/docs/layouts', title: /Layouts/i },
   { path: '/docs/static-generation', title: /Static Generation/i },
   { path: '/docs/examples', title: /Examples/i },
+  { path: '/docs/recipes', title: /Recipes/i },
   { path: '/docs/from-nextjs', title: /From Next\.js/i },
   { path: '/docs/api', title: /API Reference/i },
   { path: '/docs/adapters', title: /Adapters/i },
@@ -47,6 +48,13 @@ test('docs search includes guides', async ({ page }) => {
   await page.keyboard.press('Control+K');
   await page.locator('.docs-search-field input').fill('next');
   await expect(page.locator('.docs-search-result', { hasText: 'From Next.js' })).toBeVisible();
+});
+
+test('docs search includes recipes', async ({ page }) => {
+  await page.goto('/docs');
+  await page.keyboard.press('Control+K');
+  await page.locator('.docs-search-field input').fill('newsletter');
+  await expect(page.locator('.docs-search-result', { hasText: 'Recipes' })).toBeVisible();
 });
 
 test('docs search includes components', async ({ page }) => {
