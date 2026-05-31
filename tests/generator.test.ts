@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parse } from "../src/parser.js";
 import { extractImports } from "../src/imports.js";
 import { generate } from "../src/generator.js";
+import { compileAndRender } from "./helpers.js";
 
 function gen(source: string): string {
   const tpl = parse(source);
@@ -51,6 +52,18 @@ describe("generate", () => {
       code.indexOf("async function render(props)"),
     );
     expect(code).toContain("  const title = \"Post\"");
+  });
+
+  it("preserves multiline template literal values in frontmatter", async () => {
+    const html = await compileAndRender([
+      "---",
+      "const greeting = `Hello",
+      "World`",
+      "---",
+      "<pre>{greeting}</pre>",
+    ].join("\n"));
+
+    expect(html).toBe("<pre>Hello\nWorld</pre>");
   });
 
   it("escapes static attribute values for HTML attributes and JS template literals", () => {
