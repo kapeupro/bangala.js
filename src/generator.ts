@@ -107,7 +107,7 @@ export function generate(
     ``,
     topLevel,
     `async function render(props) {`,
-    inRender ? `  ${inRender.split("\n").join("\n  ")}` : "",
+    indentRenderFrontmatter(inRender),
     `  return \`${renderBody}\`;`,
     `}`,
     ``,
@@ -115,6 +115,56 @@ export function generate(
     `export default { render };`,
   ];
   return lines.filter((line) => line !== "").join("\n");
+}
+
+function indentRenderFrontmatter(body: string): string {
+  if (!body) return "";
+  let state: "code" | "single" | "double" | "backtick" | "line-comment" | "block-comment" = "code";
+
+  function scan(line: string): void {
+    let i = 0;
+    while (i < line.length) {
+      const ch = line[i]!;
+      const next = line[i + 1];
+
+      switch (state) {
+        case "code":
+          if (ch === "\"") state = "double";
+          else if (ch === "'") state = "single";
+          else if (ch === "`") state = "backtick";
+          else if (ch === "/" && next === "/") { state = "line-comment"; i++; }
+          else if (ch === "/" && next === "*") { state = "block-comment"; i++; }
+          i++;
+          break;
+        case "single":
+          if (ch === "\\") i += 2;
+          else { if (ch === "'") state = "code"; i++; }
+          break;
+        case "double":
+          if (ch === "\\") i += 2;
+          else { if (ch === "\"") state = "code"; i++; }
+          break;
+        case "backtick":
+          if (ch === "\\") i += 2;
+          else { if (ch === "`") state = "code"; i++; }
+          break;
+        case "line-comment":
+          i = line.length;
+          break;
+        case "block-comment":
+          if (ch === "*" && next === "/") { state = "code"; i += 2; }
+          else i++;
+          break;
+      }
+    }
+    if (state === "line-comment") state = "code";
+  }
+
+  return body.split("\n").map((line) => {
+    const prefix = state === "code" ? "  " : "";
+    scan(line);
+    return `${prefix}${line}`;
+  }).join("\n");
 }
 
 /**
