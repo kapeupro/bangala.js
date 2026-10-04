@@ -33,15 +33,23 @@ function attrLiteral(text: string): string {
   return literal(htmlEscaped);
 }
 
+/** The XML entities plus the named references most used in prose. */
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0",
+  copy: "\u00a9", reg: "\u00ae", trade: "\u2122", hellip: "\u2026", mdash: "\u2014",
+  ndash: "\u2013", lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201c", rdquo: "\u201d",
+  laquo: "\u00ab", raquo: "\u00bb", middot: "\u00b7", bull: "\u2022", times: "\u00d7",
+  divide: "\u00f7", deg: "\u00b0", euro: "\u20ac", pound: "\u00a3", yen: "\u00a5",
+  cent: "\u00a2", sect: "\u00a7", para: "\u00b6", larr: "\u2190", rarr: "\u2192",
+  uarr: "\u2191", darr: "\u2193", hearts: "\u2665", check: "\u2713", thinsp: "\u2009",
 };
 
 /**
  * Decodes the character references of a static component prop, so that
  * `<Card title="Fish &amp; Chips"/>` passes the string `Fish & Chips` (the
- * component escapes it again when it renders it). Unknown named references
- * are kept as written.
+ * component escapes it again when it renders it). Named references outside
+ * NAMED_ENTITIES are kept as written: use the character itself or a numeric
+ * reference (`&#169;`) for those.
  */
 function decodeEntities(text: string): string {
   return text.replace(/&(#\d+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/g, (ref, name: string) => {
@@ -89,7 +97,7 @@ export function generate(
     return attributes
       .map((a) =>
         a.dynamic
-          ? ` ${a.name}="\${${RUNTIME}.escape(${js(a.value)})}"`
+          ? ` ${a.name}="\${${RUNTIME}.escape((${js(a.value)}))}"`
           : ` ${a.name}="${attrLiteral(a.value)}"`,
       )
       .join("");
@@ -100,7 +108,7 @@ export function generate(
       case "Text":
         return literal(node.value);
       case "Expression":
-        return `\${${RUNTIME}.escape(${js(node.code)})}`;
+        return `\${${RUNTIME}.escape((${js(node.code)}))}`;
       case "Slot":
         return `\${props.children ?? ""}`;
       case "Element": {
@@ -118,7 +126,7 @@ export function generate(
       }
       case "EachBlock": {
         const inner = `\`${genNodes(node.body)}\``;
-        return `\${await ${RUNTIME}.each(${js(node.list)}, async (${node.item}) => ${inner})}`;
+        return `\${await ${RUNTIME}.each((${js(node.list)}), async (${node.item}) => ${inner})}`;
       }
       case "Component": {
         const props = attrsToObject(node.attributes);
@@ -142,7 +150,7 @@ export function generate(
   return [
     `import * as ${RUNTIME} from "bangala/runtime";`,
     ...moduleStatements(frontmatter).map((statement) =>
-      statement.trimEnd().endsWith(";") ? statement : `${statement};`,
+      statement.endsWith(";") ? statement : `${statement};`,
     ),
     `async function ${RENDER}(props) {`,
     renderStatements(frontmatter),

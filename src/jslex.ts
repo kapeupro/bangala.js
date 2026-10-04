@@ -8,7 +8,7 @@
  * `${}` substitutions are lexed recursively to find the closing backtick).
  */
 
-export type TokenKind = "ident" | "punct" | "string" | "template" | "regex" | "number";
+type TokenKind = "ident" | "punct" | "string" | "template" | "regex" | "number";
 
 export interface Token {
   kind: TokenKind;
@@ -21,19 +21,24 @@ export interface Token {
   postfix?: boolean;
 }
 
-/** Thrown on unterminated strings, template literals, comments and braces. */
+/**
+ * Thrown on unterminated strings, template literals, comments and braces,
+ * on an unclosed frontmatter, and when a `//` comment hides the closing `}`
+ * of a template expression (`code: "hidden-brace"`).
+ */
 export class JsLexError extends Error {
   constructor(
     message: string,
     /** Offset of the offending construct in the lexed source. */
     public offset: number,
+    public code?: "hidden-brace",
   ) {
     super(message);
     this.name = "JsLexError";
   }
 }
 
-export function isLineTerminator(ch: string | undefined): boolean {
+function isLineTerminator(ch: string | undefined): boolean {
   return ch === "\n" || ch === "\r" || ch === "\u2028" || ch === "\u2029";
 }
 
@@ -43,9 +48,12 @@ const PUNCTUATORS = [
   "*=", "/=", "%=", "&=", "|=", "^=", "**", "<<", ">>",
 ];
 
-/** Keywords after which a `/` starts a regex literal rather than a division. */
+/**
+ * Keywords after which a `/` starts a regex literal rather than a division.
+ * `of` is left out: it is far more often a variable than a `for…of` head.
+ */
 const REGEX_AFTER_KEYWORD = new Set([
-  "return", "typeof", "instanceof", "in", "of", "new", "delete", "void",
+  "return", "typeof", "instanceof", "in", "new", "delete", "void",
   "throw", "case", "do", "else", "yield", "await",
 ]);
 
@@ -55,9 +63,10 @@ const NUMBER_RE =
   /(?:0[xXoObB][0-9a-fA-F_]+n?|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d[\d_]*)?n?)/y;
 const REGEX_FLAGS_RE = /[\p{ID_Continue}$]*/uy;
 
-export class Lexer {
+class Lexer {
   pos: number;
   private prev: Token | null = null;
+  private beforePrev: Token | null = null;
   /** Called with the bounds of every `//` comment that is skipped. */
   onLineComment: ((start: number, end: number) => void) | null = null;
 
@@ -125,6 +134,7 @@ export class Lexer {
     }
     token.nl = nl;
     this.pos = token.end;
+    this.beforePrev = this.prev;
     this.prev = token;
     return token;
   }
@@ -132,6 +142,14 @@ export class Lexer {
   next(): Token | null {
     const nl = this.skipTrivia();
     return this.scan(nl);
+  }
+
+  /** True when the previous token is one of `keywords` used as a keyword (not as `x.new`). */
+  private prevIsKeyword(keywords: Set<string>): boolean {
+    const p = this.prev;
+    if (p?.kind !== "ident" || !keywords.has(p.value)) return false;
+    const b = this.beforePrev;
+    return !(b?.kind === "punct" && (b.value === "." || b.value === "?."));
   }
 
   private regexAllowed(): boolean {
@@ -144,7 +162,7 @@ export class Lexer {
       case "regex":
         return false;
       case "ident":
-        return REGEX_AFTER_KEYWORD.has(p.value);
+        return this.prevIsKeyword(REGEX_AFTER_KEYWORD);
       case "punct":
         if (p.postfix) return false;
         return !(p.value === ")" || p.value === "]" || p.value === "++" || p.value === "--");
@@ -180,7 +198,11 @@ export class Lexer {
       if (ch === "`") return { kind: "template", value: s.slice(start, i + 1), start, end: i + 1, nl: false };
       if (ch === "$" && s[i + 1] === "{") {
         const savedPrev = this.prev;
+        const savedBeforePrev = this.beforePrev;
+        const savedOnLineComment = this.onLineComment;
         this.prev = null;
+        this.beforePrev = null;
+        this.onLineComment = null;
         this.pos = i + 2;
         let depth = 0;
         for (;;) {
@@ -195,6 +217,8 @@ export class Lexer {
         }
         i = this.pos;
         this.prev = savedPrev;
+        this.beforePrev = savedBeforePrev;
+        this.onLineComment = savedOnLineComment;
         continue;
       }
       i++;
@@ -242,7 +266,7 @@ export class Lexer {
     const p = this.prev;
     if (
       ch === "!" && p && !/\s/.test(s[start - 1] ?? " ") &&
-      (p.kind === "ident" || p.value === ")" || p.value === "]")
+      ((p.kind === "ident" && !this.prevIsKeyword(REGEX_AFTER_KEYWORD)) || p.value === ")" || p.value === "]")
     ) {
       token.postfix = true;
     }
@@ -250,9 +274,9 @@ export class Lexer {
   }
 }
 
-/** Tokenizes `src[start, end)`. Template literals come back as single tokens. */
-export function tokenize(src: string, start = 0, end = src.length): Token[] {
-  const lexer = new Lexer(src, start, end);
+/** Tokenizes `src`. Template literals come back as single tokens. */
+export function tokenize(src: string): Token[] {
+  const lexer = new Lexer(src);
   const tokens: Token[] = [];
   for (let t = lexer.next(); t; t = lexer.next()) tokens.push(t);
   return tokens;
@@ -273,7 +297,11 @@ export function findClosingBrace(src: string, afterOpen: number): number {
     for (let i = start; i < end; i++) {
       if (src[i] === "{") d++;
       else if (src[i] === "}" && --d < 0) {
-        throw new JsLexError("A // comment hides the closing '}' of this expression: use /* … */ instead", start);
+        throw new JsLexError(
+          "A // comment hides the closing '}' of this expression: use /* … */ instead",
+          start,
+          "hidden-brace",
+        );
       }
     }
   };
@@ -290,8 +318,6 @@ export function findClosingBrace(src: string, afterOpen: number): number {
 }
 
 export interface FrontmatterBounds {
-  /** Offset of the opening `---`. */
-  opener: number;
   /** Frontmatter code is `source.slice(start, end)`. */
   start: number;
   end: number;
@@ -328,7 +354,6 @@ export function findFrontmatter(source: string): FrontmatterBounds | null {
       const fence = CLOSING_FENCE_RE.exec(source);
       if (fence) {
         return {
-          opener,
           start,
           end: endOfCode(source, start, lexer.pos),
           bodyOffset: lexer.pos + fence[0].length,

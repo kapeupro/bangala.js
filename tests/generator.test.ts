@@ -17,7 +17,7 @@ describe("generate", () => {
   });
 
   it("escapes interpolated expressions through the namespaced runtime", () => {
-    expect(gen("{name}")).toContain("${$$bangala.escape(name)}");
+    expect(gen("{name}")).toContain("${$$bangala.escape((name))}");
   });
 
   it("emits void elements without closing tags", () => {

@@ -33,7 +33,7 @@ export async function island(
   // `children` is slot content, i.e. trusted HTML. An island has no slot
   // content, so a `children` prop must never reach its <slot/> unescaped.
   const { children: _children, ...islandProps } = props;
-  const html = await Comp.render({ ...islandProps, children: "" });
+  const html = await Comp.render(islandProps);
   const serialized = escape(JSON.stringify(islandProps));
   const strat = strategy.replace(/^client:/, "");
   return (
@@ -42,11 +42,14 @@ export async function island(
   );
 }
 
-/** Renders `{#each}`: items render concurrently, output keeps list order. */
+/**
+ * Renders `{#each}`: items render concurrently, output keeps list order.
+ * The list must be iterable; array-likes such as `{ length: 3 }` are not.
+ */
 export async function each<T>(
-  list: Iterable<T> | ArrayLike<T>,
+  list: Iterable<T>,
   render: (item: T) => string | Promise<string>,
 ): Promise<string> {
-  const parts = await Promise.all(Array.from(list, (item) => render(item)));
+  const parts = await Promise.all([...list].map((item) => render(item)));
   return parts.join("");
 }

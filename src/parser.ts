@@ -1,5 +1,6 @@
 import type { Template, TemplateNode, Attribute } from "./types.js";
 import { findClosingBrace, findFrontmatter, JsLexError, tokenize } from "./jslex.js";
+import { isReservedName } from "./frontmatter.js";
 
 /**
  * Pedagogic error thrown by the parser. `message` keeps the short form
@@ -71,7 +72,7 @@ function suggestFor(reason: string): string | null {
 
 function renderSourceContext(source: string, line: number, column: number): string {
   if (!source) return "";
-  const lines = source.split("\n");
+  const lines = source.split(/\r\n|\r|\n|\u2028|\u2029/);
   const idx = line - 1;
   if (idx < 0 || idx >= lines.length) return "";
   const gutter = (n: number) => String(n).padStart(3, " ");
@@ -108,10 +109,11 @@ export function parseErrorAt(message: string, source: string, offset: number): P
   let line = 1;
   let column = 1;
   for (let i = 0; i < offset && i < source.length; i++) {
-    if (source[i] === "\n") {
+    const ch = source[i];
+    if (ch === "\n" || ch === "\u2028" || ch === "\u2029" || (ch === "\r" && source[i + 1] !== "\n")) {
       line++;
       column = 1;
-    } else {
+    } else if (!(i === 0 && ch === "\uFEFF") && ch !== "\r") {
       column++;
     }
   }
@@ -161,6 +163,8 @@ const RESERVED_WORDS = new Set([
   "if", "implements", "import", "in", "instanceof", "interface", "let", "new", "null",
   "package", "private", "protected", "public", "return", "static", "super", "switch", "this",
   "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield",
+  // Not keywords, but not bindable in strict (module) code either.
+  "eval", "arguments",
 ]);
 
 class Scanner {
@@ -243,7 +247,8 @@ class Scanner {
 
   /** Dispatches a `{` that is not a closing token. */
   private parseBrace(): TemplateNode | null {
-    const block = this.match(OPEN_BLOCK_RE) >= 0 ? this.src.slice(this.pos + 2).match(/^\w+/)![0] : null;
+    OPEN_BLOCK_RE.lastIndex = this.pos;
+    const block = OPEN_BLOCK_RE.exec(this.src)?.[1];
     if (block === "if") return this.parseIf();
     if (block === "each") return this.parseEach();
     if (this.startsWith("{#")) {
@@ -257,19 +262,25 @@ class Scanner {
     return this.parseExpression();
   }
 
-  /** Reads from `{` to its matching `}` and returns the inner source. */
-  private readBraced(): string {
+  /**
+   * Reads from `{` to its matching `}` and returns the inner source.
+   * `keywordLength` skips a block keyword (`#if`) before lexing, so that an
+   * expression starting with a regex literal is lexed as one.
+   */
+  private readBraced(keywordLength = 0): string {
     const open = this.pos;
     if (this.src[open] !== "{") this.error("Expected '{'");
     let close: number;
     try {
-      close = findClosingBrace(this.src, open + 1);
+      close = findClosingBrace(this.src, open + 1 + keywordLength);
     } catch (error) {
       if (!(error instanceof JsLexError)) throw error;
-      // A quote or backtick in later text can make the lexer fail far away
-      // from the real problem, which is the unclosed brace.
-      const sameLine = !/[\n\r\u2028\u2029]/.test(this.src.slice(open, error.offset));
-      if (sameLine) this.errorAt(error.message, error.offset);
+      if (error.code === "hidden-brace") this.errorAt(error.message, error.offset);
+      // A quote or backtick in later text (`<a title={x>Don't</a>`) can make
+      // the lexer fail far from the real problem, the unclosed brace. Trust
+      // its message only when no markup lies between the brace and the error.
+      const plausible = !/[<>\n\r\u2028\u2029]/.test(this.src.slice(open, error.offset));
+      if (plausible) this.errorAt(error.message, error.offset);
       this.errorAt("Unclosed '{'", open);
     }
     this.pos = close + 1;
@@ -289,8 +300,8 @@ class Scanner {
 
   private parseIf(): TemplateNode {
     const open = this.pos;
-    const condition = this.readBraced().replace(/^#if/, "").trim();
-    if (condition === "") this.errorAt("{#if} requires a condition", open);
+    const condition = this.readBraced("#if".length).slice("#if".length).trim();
+    if (tokenize(condition).length === 0) this.errorAt("{#if} requires a condition", open);
     const then = this.parseNodes(true);
     let otherwise: TemplateNode[] | null = null;
     const elseLength = this.match(ELSE_RE);
@@ -306,7 +317,7 @@ class Scanner {
 
   private parseEach(): TemplateNode {
     const open = this.pos;
-    const header = this.readBraced().replace(/^#each/, "");
+    const header = this.readBraced("#each".length).slice("#each".length);
     const { list, item } = this.parseEachHeader(header, open);
     const body = this.parseNodes(true);
     if (this.match(ELSE_RE) >= 0) this.error("{:else} is not supported inside {#each}");
@@ -323,8 +334,11 @@ class Scanner {
     tokens.forEach((t, i) => {
       if (t.kind === "punct" && "([{".includes(t.value)) depth++;
       else if (t.kind === "punct" && ")]}".includes(t.value)) depth--;
-      else if (depth === 0 && t.kind === "ident" && t.value === "as" && i > 0) asIndex = i;
+      else if (depth === 0 && t.kind === "ident" && t.value === "as" && i > 0 && i < tokens.length - 1) asIndex = i;
     });
+    // `{#each list as as}`: the item itself may be named `as`.
+    const secondLast = tokens[tokens.length - 2];
+    if (secondLast?.kind === "ident" && secondLast.value === "as" && depth === 0) asIndex = tokens.length - 2;
     if (asIndex === -1) this.errorAt(usage, open);
     const binding = tokens.slice(asIndex + 1);
     const first = binding[0];
@@ -338,8 +352,11 @@ class Scanner {
     if (binding.length > 1 || first.kind !== "ident" || !IDENTIFIER_RE.test(first.value)) {
       this.errorAt(usage, open);
     }
-    if (RESERVED_WORDS.has(first.value) || /^\$\$(?:bangala|render)$/.test(first.value)) {
+    if (RESERVED_WORDS.has(first.value) || isReservedName(first.value)) {
       this.errorAt(`'${first.value}' is a reserved word and cannot name the {#each} item`, open);
+    }
+    if (first.value === "props") {
+      this.errorAt("'props' cannot name the {#each} item: it would hide the component's props (and its <slot/> content)", open);
     }
     const list = header.slice(0, tokens[asIndex]!.start).trim();
     if (list === "") this.errorAt(usage, open);

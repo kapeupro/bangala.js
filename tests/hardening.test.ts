@@ -17,6 +17,7 @@ const FILES: Record<string, string> = {
   "sql.js": "export default (s) => `'${s}'`",
   "r.js": `export function render(x) { return "lib-render:" + typeof x }`,
   "data.json": `{"a":"json-ok"}`,
+  "Kids.bangala": `<i>{String(props.children)}</i>`,
 };
 
 function project(source: string, props: Record<string, unknown> = {}) {
@@ -193,7 +194,9 @@ describe("frontmatter exports", () => {
 
   it("exports getStaticPaths with a multi-line TS return type", async () => {
     const source = '---\nexport async function getStaticPaths(): Promise<\n  { params: { slug: string } }[]\n> {\n  return [{ params: { slug: "x" } }]\n}\nconst s: string = props.params.slug\n---\n<p>{s}</p>';
-    expect((await project(source, { params: { slug: "x" } })).html).toBe("<p>x</p>");
+    const { html, mod } = await project(source, { params: { slug: "x" } });
+    expect(html).toBe("<p>x</p>");
+    expect(await (mod.getStaticPaths as () => unknown)()).toEqual([{ params: { slug: "x" } }]);
   });
 
   it("re-exports .bangala modules with rewritten specifiers", async () => {
@@ -229,6 +232,12 @@ describe("frontmatter text is preserved (issue #2)", () => {
     const source = "---\nconst s = `a\n  b\nc`\n---\n<pre>{s}</pre>";
     expect(await compileAndRender(source)).toBe("<pre>a\n  b\nc</pre>");
     expect(compile(source, { filename: "p.bangala" }).code).toContain("const s = `a\n  b\nc`");
+  });
+
+  it("keeps the render code byte for byte around hoisted statements", () => {
+    const source = '---\r\nimport { join } from "node:path"\r\nconst s = `a\r\n  b`\r\nexport const n = 1\r\nconst t = "x" // c\r\n---\r\n<p>{s}</p>';
+    const code = compile(source, { filename: "p.bangala" }).code;
+    expect(code).toContain(';\r\nconst s = `a\r\n  b`\r\n;\r\nconst t = "x" // c\n;return');
   });
 
   it("keeps backslash line continuations intact", async () => {
@@ -306,8 +315,12 @@ describe("static attributes", () => {
 });
 
 describe("runtime each()", () => {
-  it("renders any iterable in order", async () => {
-    expect(await each(new Set([1, 2]), async (x) => String(x))).toBe("12");
+  it("renders any iterable in list order, even when items resolve out of order", async () => {
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    expect(await each(new Set([1, 2]), async (x) => {
+      if (x === 1) await delay(20);
+      return String(x);
+    })).toBe("12");
   });
 });
 
@@ -397,5 +410,124 @@ describe("closing tags", () => {
     ["an uppercase raw-text close", "<script>a()</SCRIPT>", "<script>a()</script>"],
   ])("accepts %s", async (_name, source, expected) => {
     expect(await compileAndRender(source)).toBe(expected);
+  });
+});
+
+describe("review follow-ups", () => {
+  it.each([
+    ["a keyword-named property before /", '---\nconst o = { new: 8 }\nconst a = o.new / 2 + "/" + 1\n---\n<p>{a}</p>', {}, "<p>4/1</p>"],
+    ["a variable named of before /", "---\nconst of = 6\nconst a = of / 2 // it's fine\n---\n<p>{a}</p>", {}, "<p>3</p>"],
+    ["a keyword-named property in a template expression", "<p>{props.x.new / 2}</p><a title={props.x.of / 2}>t</a>", { x: { new: 8, of: 4 } }, '<p>4</p><a title="2">t</a>'],
+    ["an {#if} condition starting with a regex", "{#if /[}]/.test(props.s)}A{/if}", { s: "}" }, "A"],
+    ["an {#each} list starting with a regex", "{#each /[}x]/.exec(props.s) as m}<i>{m}</i>{/each}", { s: "x" }, "<i>x</i>"],
+    ["a // comment inside ${} of a template expression", "<p>{`${props.x // }\n}`}</p>", { x: 1 }, "<p>1</p>"],
+    ["an {#each} item named as", "{#each props.xs as as}{as}{/each}", { xs: [1, 2] }, "12"],
+  ])("lexes %s", async (_name, source, props, expected) => {
+    expect(await compileAndRender(source, props)).toBe(expected);
+  });
+
+  it.each([
+    ["a keyword-named property", "---\nexport const flags = { new: true }\nexport const isNew = flags.new\nconst title = props.t\n---\n<p>{title}{String(isNew)}</p>", "<p>Ttrue</p>"],
+    ["a nested generic closing with >>", "---\nexport type Lists = Map<string, Array<number>>\nconst t = props.t\n---\n<p>{t}</p>", "<p>T</p>"],
+    ["a void return type", "---\nexport type Fn = () => void\nconst t = props.t\n---\n<p>{t}</p>", "<p>T</p>"],
+    ["an arrow function body followed by (", "---\nexport const f = () => {\n  return 1\n}\n(globalThis as any).__arrow = props.t\n---\n<p>{f()}{(globalThis as any).__arrow}</p>", "<p>1T</p>"],
+    ["an as-cast followed by (", "---\nexport const n = 1 as number\n(globalThis as any).__as = props.t\n---\n<p>{n}{(globalThis as any).__as}</p>", "<p>1T</p>"],
+    ["a type alias followed by [", "---\nexport type T = string\n[1].forEach(() => { (globalThis as any).__arr = props.t })\n---\n<p>{(globalThis as any).__arr}</p>", "<p>T</p>"],
+    ["code after a declaration on the same line", "---\nexport function f() { return 1 } (globalThis as any).__same = props.t\n---\n<p>{f()}{(globalThis as any).__same}</p>", "<p>1T</p>"],
+    ["a comparison > at line end", "---\nexport const big = 3 >\n  2\nconst t = props.t\n---\n<p>{String(big)}{t}</p>", "<p>trueT</p>"],
+  ])("ends an export correctly after %s", async (_name, source, expected) => {
+    expect((await project(source, { t: "T" })).html).toBe(expected);
+  });
+
+  it("hoists Allman-style declarations whole", async () => {
+    const source = "---\nexport class Box\n{\n  size = 2\n}\nexport function area(): number\n{\n  return new Box().size * 2\n}\nconst t = props.t\n---\n<p>{t}{area()}</p>";
+    expect((await project(source, { t: "T" })).html).toBe("<p>T4</p>");
+  });
+
+  it("lexes a regex right after a keyword and !", async () => {
+    const source = "---\nexport function noBrace(s: string) {\n  return!/[}]/.test(s)\n}\n---\n<p>{String(noBrace(props.s))}</p>";
+    expect((await project(source, { s: "a" })).html).toBe("<p>true</p>");
+  });
+
+  it("registers every name of a multi-declarator export", async () => {
+    const { mod } = await project("---\nexport const a = 1, b = 2\nexport { b as bee }\n---\n<p>{a}</p>");
+    expect(mod.bee).toBe(2);
+    expect(parseError("---\nexport const a = 1, render = 2\n---\n<p>x</p>").message).toMatch(/Exporting 'render'/);
+    expect(parseError("---\nexport const { render } = { render: 1 }\n---\n<p>x</p>").message).toMatch(/Exporting 'render'/);
+  });
+
+  it("allows a type-only export of a frontmatter type", async () => {
+    expect((await project("---\ninterface Props { t: string }\nexport type { Props }\nconst { t } = props as Props\n---\n<p>{t}</p>", { t: "T" })).html).toBe("<p>T</p>");
+  });
+
+  it("throws for an {#each} over a non-iterable, as before", async () => {
+    await expect(compileAndRender("{#each props.n as x}{x}{/each}", { n: { length: 3 } })).rejects.toThrow(/iterable/);
+  });
+
+  it("does not pass a children key to an island", async () => {
+    expect((await project('---\nimport Kids from "./Kids.bangala"\n---\n<Kids client:load/>')).html)
+      .toBe('<bangala-island data-entry="./Kids" data-props="{}" data-strategy="load"><i>undefined</i></bangala-island>');
+  });
+
+  it("decodes common named references in static component props", async () => {
+    expect((await project('---\nimport Card from "./Card.bangala"\n---\n<Card title="&copy; 2026 &mdash; x"/>')).html)
+      .toBe('<div class="card">\u00a9 2026 \u2014 x</div>');
+  });
+
+  it("refuses names that would bypass the generated bindings", () => {
+    expect(parseError("{#each props.xs as props}<slot/>{/each}").message).toMatch(/'props' cannot name the \{#each\} item/);
+    expect(parseError("---\nconst \\u0024\\u0024bangala = 1\n---\n<p>x</p>").message).toMatch(/reserved/);
+  });
+});
+
+describe("review follow-ups (quality)", () => {
+  it.each([
+    ["a type literal followed by [", "---\nexport type Pair = { a: number }\n[props.a, props.b] = [props.b, props.a]\n---\n<p>{props.a}{props.b}</p>", "<p>21</p>"],
+    ["a const enum followed by (", "---\nexport const enum E { A = 1 }\n(() => { props.seen = true })()\n---\n<p>{String(props.seen)}</p>", "<p>true</p>"],
+    ["a declare const followed by (", "---\nexport declare const x: number\n(() => { props.seen = true })()\n---\n<p>{String(props.seen)}</p>", "<p>true</p>"],
+    ["a union type followed by a template", '---\nexport type U = "a" | "b"\n`${(props.seen = true)}`\n---\n<p>{String(props.seen)}</p>', "<p>true</p>"],
+    ["a postfix ++ followed by (", "---\nexport let c = 0, d = c++\n(() => { props.seen = true })()\n---\n<p>{String(props.seen)}{d}</p>", "<p>true0</p>"],
+  ])("ends an export after %s", async (_name, source, expected) => {
+    expect((await project(source, { a: 1, b: 2 })).html).toBe(expected);
+  });
+
+  it("evaluates an {#each} list with a comma as one expression", async () => {
+    expect(await compileAndRender("{#each props.a, props.b as x}<i>{x}</i>{/each}", { a: [1], b: [2, 3] }))
+      .toBe("<i>2</i><i>3</i>");
+  });
+
+  it("points brace errors at the real cause", () => {
+    expect(parseError("<p>{props.a ??\n  props.b // fallback}</p>\n<p>x</p>").message).toMatch(/^A \/\/ comment hides/);
+    expect(parseError("<a title={props.t>Don't</a>").message).toBe("Unclosed '{' (line 1, column 10)");
+  });
+
+  it("counts every line terminator, and not the BOM, in error positions", () => {
+    expect(parseError("---\rconst a = 1\rexport default a\r---\r<p/>").message).toMatch(/\(line 3, column 1\)$/);
+    expect(parseError("---\nconst a = 1\u2028export default a\n---\n<p/>").message).toMatch(/\(line 3, column 1\)$/);
+    expect(parseError("\uFEFF---\nconst a = 1\n<p/>").message).toMatch(/\(line 1, column 1\)$/);
+  });
+
+  it("validates headers before esbuild sees them", () => {
+    expect(parseError("{#if /* c */}x{/if}").message).toMatch(/^\{#if\} requires a condition/);
+    expect(parseError("{#each props.xs as eval}{eval}{/each}").message).toMatch(/'eval' is a reserved word/);
+    expect(parseError("{#each props.xs as arguments}{/each}").message).toMatch(/'arguments' is a reserved word/);
+  });
+
+  it("compiles thousands of .bangala imports in linear time", () => {
+    const imports = (n: number) => Array.from({ length: n }, (_, i) => `import C${i} from "./C${i}.bangala"`).join("\n");
+    // Best of three runs, so a slow CI moment cannot fake a quadratic curve.
+    const time = (n: number) => {
+      const source = `---\n${imports(n)}\n---\n<p>x</p>`;
+      let best = Infinity;
+      for (let run = 0; run < 3; run++) {
+        const start = performance.now();
+        compile(source, { filename: "p.bangala" });
+        best = Math.min(best, performance.now() - start);
+      }
+      return best;
+    };
+    time(500);
+    // 4x the imports: about 4x the time when linear, 16x when quadratic.
+    expect(time(8000)).toBeLessThan(Math.max(20, time(2000)) * 10);
   });
 });
