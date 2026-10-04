@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   build as viteBuild,
@@ -36,6 +36,11 @@ export interface BangalaBuildOptions {
   root?: string;
   pages?: string;
   outDir?: string;
+  /**
+   * Empty outDir before building. Mirrors Vite: defaults to true when outDir is
+   * inside root; an outDir outside root is only emptied when this is true.
+   */
+  emptyOutDir?: boolean;
   /** Extra pathnames to prerender, usually dynamic routes such as /blog/hello. */
   prerender?: string[];
   injectClient?: boolean;
@@ -157,6 +162,19 @@ export async function buildBangala(
   const injectClient = options.injectClient ?? true;
   const buildClient = options.client ?? true;
 
+  // Vite copies publicDir into outDir, so the two must not overlap either.
+  const publicDir = options.vite?.publicDir === false
+    ? null
+    : resolve(root, options.vite?.publicDir || "public");
+  assertSafeOutDir(outDir, root, pagesRoot, publicDir);
+  const emptyOutDir = options.emptyOutDir ?? isWithin(outDir, root);
+  if (options.emptyOutDir === undefined && !emptyOutDir) {
+    console.warn(
+      `bangala: outDir '${outDir}' is outside the project root '${root}' and will not be emptied. ` +
+        "Pass emptyOutDir: true to empty it before building.",
+    );
+  }
+
   if (buildClient) {
     await viteBuild(mergeConfig(
       {
@@ -166,7 +184,7 @@ export async function buildBangala(
         plugins: [bangala({ pages: false })],
         build: {
           outDir,
-          emptyOutDir: true,
+          emptyOutDir,
           rollupOptions: {
             input: { [CLIENT_ENTRY_NAME]: "bangala/client/auto" },
             output: {
@@ -179,7 +197,7 @@ export async function buildBangala(
       } satisfies InlineConfig,
       options.vite ?? {},
     ));
-  } else {
+  } else if (emptyOutDir) {
     await rm(outDir, { recursive: true, force: true });
   }
 
@@ -199,9 +217,10 @@ export async function buildBangala(
     for (const pathname of pathnames) {
       const match = matchRoute(routes, pathname);
       if (!match) throw new Error(`No route matches prerender path '${pathname}'`);
+      const file = outputFileForPathname(outDir, pathname);
+      assertSafePrerenderTarget(outDir, pathname, match, file);
       let html = await renderMatchedRoute(server, match);
       if (injectClient && buildClient) html = injectBuildClient(html, `/${CLIENT_ENTRY_FILE}`);
-      const file = outputFileForPathname(outDir, pathname);
       await mkdir(dirname(file), { recursive: true });
       await writeFile(file, html);
       pages.push({ pathname: match.pathname, file, route: match.route, params: match.params });
@@ -319,6 +338,7 @@ function buildPathnameFromRoute(
           `getStaticPaths for '${route.file}': param '${seg.name}' must be a string`,
         );
       }
+      assertStaticPathSegment(route, seg.name, v);
       parts.push(encodeURIComponent(v));
     } else {
       // catch-all
@@ -328,10 +348,97 @@ function buildPathnameFromRoute(
           `getStaticPaths for '${route.file}': catch-all param '${seg.name}' must be a string[]`,
         );
       }
+      // Each item becomes one path segment, so it obeys the same rules.
+      for (const s of v) assertStaticPathSegment(route, seg.name, String(s));
       parts.push(...v.map((s) => encodeURIComponent(s)));
     }
   }
   return parts.length === 0 ? "/" : "/" + parts.join("/");
+}
+
+function assertStaticPathSegment(route: FileRoute, name: string, value: string): void {
+  const reason = unsafeSegmentReason(value);
+  if (reason) {
+    throw new Error(
+      `getStaticPaths for '${route.file}': param '${name}' ${reason} (got ${JSON.stringify(value)}); ` +
+        "each value must be a single, non-empty path segment",
+    );
+  }
+}
+
+/**
+ * Explains why a param value cannot be written as exactly one directory under
+ * outDir (it would collapse, climb out, or split into several), or null.
+ */
+function unsafeSegmentReason(value: string): string | null {
+  if (value === "") return "is empty";
+  if (value === "." || value === "..") return `is a '${value}' path segment`;
+  if (value.includes("/")) return "contains '/'";
+  if (value.includes("\\")) return "contains '\\'";
+  if (value.includes("\0")) return "contains a NUL byte";
+  return null;
+}
+
+/**
+ * Last check before a prerendered page is written: the file must stay inside
+ * outDir, and every matched param (decoded, so `%2E%2E` counts as `..`) must
+ * be a plain segment. Covers both getStaticPaths and the `prerender` option.
+ */
+function assertSafePrerenderTarget(
+  outDir: string,
+  pathname: string,
+  match: RouteMatch,
+  file: string,
+): void {
+  const where = `Prerender path '${pathname}' for '${match.route.file}'`;
+  if (!isWithin(file, outDir)) {
+    throw new Error(
+      `${where} (params ${JSON.stringify(match.params)}) resolves to '${file}', ` +
+        `which is outside outDir '${outDir}'`,
+    );
+  }
+  for (const [name, value] of Object.entries(match.params)) {
+    for (const segment of Array.isArray(value) ? value : [value]) {
+      const reason = unsafeSegmentReason(segment);
+      if (reason) throw new Error(`${where}: param '${name}' ${reason}`);
+    }
+  }
+}
+
+/**
+ * Refuses output directories whose emptying or overwriting would destroy
+ * project sources: the filesystem root, the project root or any ancestor of
+ * it, and anything overlapping the pages or public directory.
+ */
+function assertSafeOutDir(
+  outDir: string,
+  root: string,
+  pagesRoot: string,
+  publicDir: string | null,
+): void {
+  const refuse = (why: string) =>
+    new Error(`Refusing to use outDir '${outDir}': ${why}. Pick a dedicated folder such as 'dist'.`);
+  if (outDir === parse(outDir).root) {
+    throw refuse("it is the filesystem root");
+  }
+  if (relative(root, outDir) === "") {
+    throw refuse("it is the project root, and emptying it would delete your sources");
+  }
+  if (isWithin(root, outDir)) {
+    throw refuse(`it contains the project root '${root}', and emptying it would delete your sources`);
+  }
+  if (isWithin(outDir, pagesRoot) || isWithin(pagesRoot, outDir)) {
+    throw refuse(`it overlaps the pages directory '${pagesRoot}'`);
+  }
+  if (publicDir && (isWithin(outDir, publicDir) || isWithin(publicDir, outDir))) {
+    throw refuse(`it overlaps the public directory '${publicDir}', whose files Vite copies into outDir`);
+  }
+}
+
+/** True when `child` is `parent` itself or somewhere below it. */
+function isWithin(child: string, parent: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
 function outputFileForPathname(outDir: string, pathname: string): string {
