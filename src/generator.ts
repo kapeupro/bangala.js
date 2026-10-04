@@ -1,29 +1,77 @@
 import type {
   Template, TemplateNode, Attribute, CompileOptions,
 } from "./types.js";
-import { extractImports, type ComponentImport } from "./imports.js";
+import { moduleStatements, renderStatements, type FrontmatterModel } from "./frontmatter.js";
+
+/**
+ * Identifiers of the generated module. The runtime helpers live behind one
+ * namespace so that frontmatter bindings named `escape`, `island`, … can
+ * never replace them (a local `escape` would otherwise silently disable
+ * HTML escaping). Frontmatter may not declare these names.
+ */
+const RUNTIME = "$$bangala";
+const RENDER = "$$render";
 
 /** Escapes text for safe inclusion inside a JS template literal. */
 function literal(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
 }
 
+/** A `&` that does not already start a character reference. */
+const BARE_AMPERSAND = /&(?!(?:#\d+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);)/g;
+
 /**
  * Escapes a static attribute value for HTML emission. Doubles up as both
- * an HTML-attribute escape (must escape `&`, `"`) AND a JS template-literal
- * escape (must escape backticks and `${`). The HTML escape runs first; the
- * template-literal escape then runs over the (already HTML-safe) text.
+ * an HTML-attribute escape (must escape bare `&` and `"`, while character
+ * references the author wrote, like `&amp;`, are kept) AND a JS
+ * template-literal escape (must escape backticks and `${`).
  */
 function attrLiteral(text: string): string {
   const htmlEscaped = text
-    .replace(/&/g, "&amp;")
+    .replace(BARE_AMPERSAND, "&amp;")
     .replace(/"/g, "&quot;");
   return literal(htmlEscaped);
 }
 
+/** The XML entities plus the named references most used in prose. */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: "\u00a0",
+  copy: "\u00a9", reg: "\u00ae", trade: "\u2122", hellip: "\u2026", mdash: "\u2014",
+  ndash: "\u2013", lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201c", rdquo: "\u201d",
+  laquo: "\u00ab", raquo: "\u00bb", middot: "\u00b7", bull: "\u2022", times: "\u00d7",
+  divide: "\u00f7", deg: "\u00b0", euro: "\u20ac", pound: "\u00a3", yen: "\u00a5",
+  cent: "\u00a2", sect: "\u00a7", para: "\u00b6", larr: "\u2190", rarr: "\u2192",
+  uarr: "\u2191", darr: "\u2193", hearts: "\u2665", check: "\u2713", thinsp: "\u2009",
+};
+
+/**
+ * Decodes the character references of a static component prop, so that
+ * `<Card title="Fish &amp; Chips"/>` passes the string `Fish & Chips` (the
+ * component escapes it again when it renders it). Named references outside
+ * NAMED_ENTITIES are kept as written: use the character itself or a numeric
+ * reference (`&#169;`) for those.
+ */
+function decodeEntities(text: string): string {
+  return text.replace(/&(#\d+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/g, (ref, name: string) => {
+    if (name[0] !== "#") return NAMED_ENTITIES[name] ?? ref;
+    const hex = name[1] === "x" || name[1] === "X";
+    const codePoint = parseInt(name.slice(hex ? 2 : 1), hex ? 16 : 10);
+    return codePoint > 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : ref;
+  });
+}
+
+/**
+ * User code spliced into generated code. A `//` comment would swallow the
+ * closing `)` the generator appends on the same line, so end with a line
+ * break whenever the code might hold one.
+ */
+function js(code: string): string {
+  return code.includes("//") ? `${code}\n` : code;
+}
+
 function attrsToObject(attributes: Attribute[]): string {
   const entries = attributes.map((a) => {
-    const value = a.dynamic ? a.value : JSON.stringify(a.value);
+    const value = a.dynamic ? `(${js(a.value)})` : JSON.stringify(decodeEntities(a.value));
     return `${JSON.stringify(a.name)}: ${value}`;
   });
   return `{${entries.join(", ")}}`;
@@ -36,11 +84,10 @@ const VOID_ELEMENTS = new Set([
 
 export function generate(
   template: Template,
-  components: ComponentImport[],
+  frontmatter: FrontmatterModel,
   _options: CompileOptions,
 ): string {
-  const byName = new Map(components.map((c) => [c.name, c.path]));
-  const { imports, body } = extractImports(template.frontmatter);
+  const byName = new Map(frontmatter.components.map((c) => [c.name, c.path]));
 
   function genNodes(nodes: TemplateNode[]): string {
     return nodes.map(genNode).join("");
@@ -50,7 +97,7 @@ export function generate(
     return attributes
       .map((a) =>
         a.dynamic
-          ? ` ${a.name}="\${escape(${a.value})}"`
+          ? ` ${a.name}="\${${RUNTIME}.escape((${js(a.value)}))}"`
           : ` ${a.name}="${attrLiteral(a.value)}"`,
       )
       .join("");
@@ -61,7 +108,7 @@ export function generate(
       case "Text":
         return literal(node.value);
       case "Expression":
-        return `\${escape(${node.code})}`;
+        return `\${${RUNTIME}.escape((${js(node.code)}))}`;
       case "Slot":
         return `\${props.children ?? ""}`;
       case "Element": {
@@ -75,90 +122,41 @@ export function generate(
       case "IfBlock": {
         const then = `\`${genNodes(node.then)}\``;
         const otherwise = node.otherwise ? `\`${genNodes(node.otherwise)}\`` : `""`;
-        return `\${(${node.condition}) ? ${then} : ${otherwise}}`;
+        return `\${(${js(node.condition)}) ? ${then} : ${otherwise}}`;
       }
       case "EachBlock": {
         const inner = `\`${genNodes(node.body)}\``;
-        return (
-          `\${(await Promise.all([...${node.list}]` +
-          `.map(async (${node.item}) => ${inner}))).join("")}`
-        );
+        return `\${await ${RUNTIME}.each((${js(node.list)}), async (${node.item}) => ${inner})}`;
       }
       case "Component": {
         const props = attrsToObject(node.attributes);
         if (node.island) {
           const path = byName.get(node.name)!.replace(/\.bangala$/, "");
-          return `\${await island(${node.name}, ${props}, ${JSON.stringify(path)}, ${JSON.stringify(node.strategy!)})}`;
+          return `\${await ${RUNTIME}.island(${node.name}, ${props}, ${JSON.stringify(path)}, ${JSON.stringify(node.strategy!)})}`;
         }
         const children =
           node.children.length > 0
             ? `, async () => \`${genNodes(node.children)}\``
             : "";
-        return `\${await renderComponent(${node.name}, ${props}${children})}`;
+        return `\${await ${RUNTIME}.renderComponent(${node.name}, ${props}${children})}`;
       }
     }
   }
 
   const renderBody = genNodes(template.nodes);
-  const { topLevel, inRender } = splitFrontmatterExports(body);
-  const lines = [
-    `import { escape, renderComponent, island } from "bangala/runtime";`,
-    ...imports,
-    ``,
-    topLevel,
-    `async function render(props) {`,
-    inRender ? `  ${inRender.split("\n").join("\n  ")}` : "",
-    `  return \`${renderBody}\`;`,
+  // Hoisted imports/exports run at module scope; every other byte of the
+  // frontmatter runs inside render(), verbatim (no re-indentation, so
+  // multi-line strings keep their exact content).
+  return [
+    `import * as ${RUNTIME} from "bangala/runtime";`,
+    ...moduleStatements(frontmatter).map((statement) =>
+      statement.endsWith(";") ? statement : `${statement};`,
+    ),
+    `async function ${RENDER}(props) {`,
+    renderStatements(frontmatter),
+    `;return \`${renderBody}\`;`,
     `}`,
-    ``,
-    `export { render };`,
-    `export default { render };`,
-  ];
-  return lines.filter((line) => line !== "").join("\n");
-}
-
-/**
- * Splits the frontmatter into two pieces:
- *  - `topLevel`: lines that must live at the top of the generated module
- *    (they use `export`, ESM doesn't allow that inside a function body)
- *  - `inRender`: everything else, executed inside the page's render(props).
- *
- * Function/class declarations whose header carries `export` are kept as a
- * single block by following brace depth across lines.
- */
-function splitFrontmatterExports(body: string): { topLevel: string; inRender: string } {
-  if (!body) return { topLevel: "", inRender: "" };
-  const lines = body.split("\n");
-  const topLines: string[] = [];
-  const renderLines: string[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i]!;
-    if (!/^\s*export\b/.test(line)) {
-      renderLines.push(line);
-      i++;
-      continue;
-    }
-    const trimmed = line.trim();
-    const isBlock = /^export\s+(?:async\s+)?(?:function|class)\b/.test(trimmed);
-    if (!isBlock) {
-      topLines.push(line);
-      i++;
-      continue;
-    }
-    const start = i;
-    let depth = 0;
-    let opened = false;
-    while (i < lines.length) {
-      const cur = lines[i]!;
-      for (const ch of cur) {
-        if (ch === "{") { depth++; opened = true; }
-        else if (ch === "}") depth--;
-      }
-      i++;
-      if (opened && depth === 0) break;
-    }
-    topLines.push(lines.slice(start, i).join("\n"));
-  }
-  return { topLevel: topLines.join("\n"), inRender: renderLines.join("\n") };
+    `export { ${RENDER} as render };`,
+    `export default { render: ${RENDER} };`,
+  ].join("\n");
 }

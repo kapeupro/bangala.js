@@ -61,7 +61,7 @@ const headings = [
   <CodeBlock filename="pages/index.bangala" code={anatomy}/>
 
   <h2 id="frontmatter">Frontmatter</h2>
-  <p>Frontmatter runs inside the generated async <code>render(props)</code> function. Use it for imports, local variables, <code>await</code>, and reading <code>props</code>. Exported declarations such as <code>getStaticPaths()</code> are hoisted to module scope.</p>
+  <p>Frontmatter runs inside the generated async <code>render(props)</code> function. Use it for imports, local variables, <code>await</code>, and reading <code>props</code>. Exported declarations such as <code>getStaticPaths()</code> are hoisted to module scope: they run once, cannot see other frontmatter variables or <code>props</code>, and should export the data they need (<code>export const posts = […]</code>). Identifiers <code>$$bangala</code> and <code>$$render</code> are reserved.</p>
 
   <h2 id="expressions">Expressions</h2>
   <p><code>{`{expression}`}</code> inserts a JavaScript expression into HTML and escapes the result. This protects text and attribute values from markup injection by default.</p>

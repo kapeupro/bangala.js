@@ -299,6 +299,12 @@ describe("parse — pedagogic errors", () => {
 
   it("keeps .message short so existing error matchers still work", () => {
     const err = caught("<div>");
-    expect(err.message).toBe("Unclosed <div> (line 1, column 6)");
+    expect(err.message).toBe("Unclosed <div> (line 1, column 1)");
+  });
+
+  it("points unclosed errors at the opener, with the real closing tag as suggestion", () => {
+    const err = caught("<main>\n  <section class=\"card\">\n    <p>a</p>\n  <footer>f</footer>\n</main>");
+    expect(err.message).toBe("Unclosed <section> (line 2, column 3)");
+    expect(err.format()).toContain("'</section>'");
   });
 });

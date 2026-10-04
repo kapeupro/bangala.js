@@ -30,11 +30,26 @@ export async function island(
   entry: string,
   strategy: string,
 ): Promise<string> {
-  const html = await Comp.render(props);
-  const serialized = escape(JSON.stringify(props));
+  // `children` is slot content, i.e. trusted HTML. An island has no slot
+  // content, so a `children` prop must never reach its <slot/> unescaped.
+  const { children: _children, ...islandProps } = props;
+  const html = await Comp.render(islandProps);
+  const serialized = escape(JSON.stringify(islandProps));
   const strat = strategy.replace(/^client:/, "");
   return (
-    `<bangala-island data-entry="${entry}" data-props="${serialized}" ` +
-    `data-strategy="${strat}">${html}</bangala-island>`
+    `<bangala-island data-entry="${escape(entry)}" data-props="${serialized}" ` +
+    `data-strategy="${escape(strat)}">${html}</bangala-island>`
   );
+}
+
+/**
+ * Renders `{#each}`: items render concurrently, output keeps list order.
+ * The list must be iterable; array-likes such as `{ length: 3 }` are not.
+ */
+export async function each<T>(
+  list: Iterable<T>,
+  render: (item: T) => string | Promise<string>,
+): Promise<string> {
+  const parts = await Promise.all([...list].map((item) => render(item)));
+  return parts.join("");
 }

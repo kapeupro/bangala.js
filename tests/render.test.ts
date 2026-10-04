@@ -50,7 +50,7 @@ describe("compile — island markers", () => {
       { componentPath: "./Counter.bangala", strategy: "client:load" },
     ]);
     expect(result.code).toContain(
-      `await island(Counter, {"start": 5}, "./Counter", "client:load")`,
+      `await $$bangala.island(Counter, {"start": (5)}, "./Counter", "client:load")`,
     );
   });
 
@@ -62,7 +62,7 @@ describe("compile — island markers", () => {
       { componentPath: "./Counter.bangala", strategy: "client:idle" },
     ]);
     expect(result.code).toContain(
-      `await island(Counter, {"start": 5}, "./Counter", "client:idle")`,
+      `await $$bangala.island(Counter, {"start": (5)}, "./Counter", "client:idle")`,
     );
   });
 
@@ -79,7 +79,7 @@ describe("compile — reference example", () => {
     for (const name of ["Counter", "Layout", "index"]) {
       const src = readFileSync(join(FIXTURES, `${name}.bangala`), "utf8");
       const result = compile(src, { filename: `${name}.bangala` });
-      expect(result.code).toContain("export { render };");
+      expect(result.code).toContain("export { $$render as render };");
     }
   });
 });

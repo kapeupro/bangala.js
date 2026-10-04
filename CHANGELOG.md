@@ -2,6 +2,34 @@
 
 All notable changes to bangala.js are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- **The frontmatter is parsed as JavaScript, not as lines of text.** A small JavaScript/TypeScript lexer (`src/jslex.ts`) now drives the frontmatter fence, `import`/`export` hoisting and template `{expr}` scanning, so strings, template literals, comments and regex literals can hold `---`, `{`, `}`, `import` or `export` safely.
+  - The frontmatter is emitted byte for byte. Multi-line template literals and line continuations are no longer re-indented (#2).
+  - Imports work with CRLF line endings, on several lines, several per line, without spaces (`import{a}from"x"`), with `with { type: "json" }`, and in every clause form (`import X, { y }`, `import { default as X }`, `import * as X`).
+  - Multi-line exports are hoisted whole: `export const x = {…}`, `export interface`, `export type`, `export enum`, overloads, functions with braces in strings, comments or regexes, and multi-line signatures.
+  - Text that only looks like `import`/`export` (in a string, comment or object key) is no longer hoisted.
+  - `.bangala` specifiers are rewritten in re-exports and literal `import()` calls, and every imported `.bangala` file is listed in `dependencies`.
+  - The fence scan now also understands regex literals and braces inside `${…}`: `/\/*$/`, `` /`/ `` or `` `${"{"}` `` no longer make it swallow the template (#1 was fixed in 1.0.0 for strings, template literals and comments). Fences may carry surrounding spaces, and CR-only line endings work.
+- **A frontmatter binding can no longer disable HTML escaping.** The generated module reaches its helpers through the reserved `$$bangala` namespace, so a local or imported `escape`, `island`, `renderComponent`, `render` or `Promise` (including an `{#each}` item) no longer replaces them. Before, `function escape()` in the frontmatter turned off escaping for the whole page.
+- **An island's `children` prop is no longer rendered as raw HTML.** `island()` strips it, and the compiler rejects a `children` prop on any component.
+- Static attribute values keep the character references the author wrote (`href="?a=1&amp;b=2"` was emitted as `&amp;amp;`), and static component props are decoded (`title="Fish &amp; Chips"` passes `Fish & Chips`; numeric references and common named ones such as `&copy;` and `&mdash;` are supported).
+- Template `{expr}`, dynamic attributes and `{#if}`/`{#each}` headers handle braces in strings, template literals, regexes and comments, and a trailing `//` comment no longer breaks the generated code.
+- `{#each}` accepts multi-line lists, Unicode and `$` item names, and TypeScript `as` casts in the list.
+- Block tokens tolerate whitespace (`{/if }`, `{:else }`), and closing tags accept whitespace and any letter case (`</div >`, `</DIV>`).
+- Errors are clearer and point at the cause: unclosed tags, blocks and braces are reported at their opener with the real closing tag as suggestion; unterminated strings, template literals and comments in the frontmatter are located; `{:else if}`, `{@html}`, unknown blocks (`{#iff}`), misplaced `{:else}`, mismatched block closers, `{#each}` destructuring or index, and components imported from non-`.bangala` modules get dedicated messages.
+- The docs blog recipe exported `getStaticPaths()` without exporting the `posts` it reads.
+
+### Changed
+
+- A frontmatter without a closing `---` line is now an error instead of swallowing the whole template.
+- `export default`, exporting `render`, `export { local }` for a non-exported frontmatter local, a `children` component prop and the identifiers `$$bangala` / `$$render` are now compile errors.
+- `{}` is an error, and `{/* comment */}` renders nothing (it used to render `undefined`).
+- The generated module's shape changed (`$$bangala.escape(…)`, `$$render`); it still exports `render` and a default `{ render }`. The runtime helpers `escape`, `island` and `renderComponent` are no longer implicitly in scope in the frontmatter: import what you use from `bangala/runtime` (an unimported `escape()` would now call the browser's legacy global).
+- An `{#each}` item may not be named `props`.
+
 ## [1.0.0] - 2026-05-24
 
 ### Added

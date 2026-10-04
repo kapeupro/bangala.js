@@ -34,7 +34,7 @@ const landingPage = [
 
 const blogPost = [
   "---",
-  "const posts = [",
+  "export const posts = [",
   '  { slug: "launch", title: "Launch notes", date: "2026-05-27", body: "What shipped and why it matters." },',
   '  { slug: "performance", title: "Performance budget", date: "2026-05-28", body: "How we keep pages small." },',
   "];",

@@ -175,6 +175,25 @@ interface IslandRef {
 
 The compiled module exports `render(props): Promise<string>`.
 
+### Frontmatter
+
+The frontmatter is JavaScript or TypeScript (types are stripped, not
+checked). It is copied verbatim into the page's `render(props)`, except for
+`import` and `export` statements, which are hoisted to module scope:
+
+- Exported declarations (`export function getStaticPaths()`,
+  `export const posts = [...]`) run once, at module scope. They cannot see
+  other frontmatter variables or `props`, so export the data they need.
+- `export default`, exporting `render`, and `export { name }` for a name
+  that is not imported or exported are compile errors.
+- `$$bangala` and `$$render` are reserved identifiers, and `children` is a
+  reserved component prop (it carries slot content).
+
+Inside the template, `{expr}` is a JavaScript expression: braces in strings,
+template literals, regexes and comments are handled. `{/* note */}` renders
+nothing, `{}` is an error, and a `//` comment must not hide the closing `}`
+(use `/* */` or end the expression on the next line).
+
 ### `discoverRoutes(root, options?)`
 
 Walks a directory and returns a sorted manifest of `.bangala` page routes.
