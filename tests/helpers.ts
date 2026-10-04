@@ -27,3 +27,33 @@ export async function compileAndRender(
   };
   return mod.render(props);
 }
+
+/**
+ * Writes `files` into a fresh directory under `tests/.tmp/`, compiles every
+ * `.bangala` file to a sibling `.js` module (compile() + esbuild), copies
+ * the other files verbatim, then imports `entry` and renders it.
+ */
+export async function compileAndRenderProject(
+  files: Record<string, string>,
+  entry: string,
+  props: Record<string, unknown> = {},
+): Promise<{ html: string; mod: Record<string, unknown>; code: string }> {
+  const dir = join(TMP_DIR, `project-${counter++}-${Date.now()}`);
+  let entryCode = "";
+  for (const [name, content] of Object.entries(files)) {
+    const file = join(dir, name);
+    mkdirSync(dirname(file), { recursive: true });
+    if (!name.endsWith(".bangala")) {
+      writeFileSync(file, content);
+      continue;
+    }
+    const { code } = compile(content, { filename: name });
+    if (name === entry) entryCode = code;
+    const js = (await transform(code, { loader: "ts", format: "esm" })).code;
+    writeFileSync(file.replace(/\.bangala$/, ".js"), js);
+  }
+  const mod = (await import(pathToFileURL(join(dir, entry.replace(/\.bangala$/, ".js"))).href)) as {
+    render: (p: Record<string, unknown>) => Promise<string>;
+  };
+  return { html: await mod.render(props), mod, code: entryCode };
+}

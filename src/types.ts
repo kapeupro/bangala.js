@@ -64,7 +64,10 @@ export type TemplateNode =
   | SlotNode;
 
 export interface Template {
+  /** Frontmatter code, byte for byte (without the `---` fences). */
   frontmatter: string;
+  /** Offset of the frontmatter code in the .bangala source. */
+  frontmatterOffset: number;
   nodes: TemplateNode[];
 }
 

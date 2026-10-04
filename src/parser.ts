@@ -1,4 +1,5 @@
 import type { Template, TemplateNode, Attribute } from "./types.js";
+import { findClosingBrace, findFrontmatter, JsLexError, tokenize } from "./jslex.js";
 
 /**
  * Pedagogic error thrown by the parser. `message` keeps the short form
@@ -34,14 +35,17 @@ export class ParseError extends Error {
 }
 
 /** Small table of common parse errors → human-friendly fixes. */
-const SUGGESTIONS: { match: (reason: string) => boolean; suggestion: string }[] = [
+const SUGGESTIONS: {
+  match: (reason: string) => boolean;
+  suggestion: string | ((reason: string) => string);
+}[] = [
   {
     match: (r) => r === "{#if} requires a condition",
     suggestion: "write '{#if condition}' — e.g. '{#if user.isAdmin}'",
   },
   {
-    match: (r) => r.startsWith("Unclosed <"),
-    suggestion: "add a matching closing tag, e.g. '</div>'",
+    match: (r) => /^Unclosed <[^>]+>$/.test(r),
+    suggestion: (r) => `add the matching closing tag '</${r.slice("Unclosed <".length, -1)}>'`,
   },
   {
     match: (r) => r === "Expected quoted attribute value",
@@ -59,7 +63,8 @@ const SUGGESTIONS: { match: (reason: string) => boolean; suggestion: string }[] 
 
 function suggestFor(reason: string): string | null {
   for (const entry of SUGGESTIONS) {
-    if (entry.match(reason)) return entry.suggestion;
+    if (!entry.match(reason)) continue;
+    return typeof entry.suggestion === "function" ? entry.suggestion(reason) : entry.suggestion;
   }
   return null;
 }
@@ -89,109 +94,74 @@ const RAW_TEXT_ELEMENTS = new Set(["script", "style", "textarea"]);
 
 export function parse(source: string, _filename = "<unknown>"): Template {
   const fm = extractFrontmatter(source);
-  const frontmatter = fm ? fm.frontmatter.trim() : "";
-  const body = fm ? source.slice(fm.bodyOffset) : source;
+  const frontmatter = fm ? fm.frontmatter : "";
+  const frontmatterOffset = fm ? fm.frontmatterOffset : 0;
   const offset = fm ? fm.bodyOffset : 0;
+  const body = source.slice(offset);
   const scanner = new Scanner(body, offset, source);
   const nodes = scanner.parseNodes(false);
-  return { frontmatter, nodes };
+  return { frontmatter, frontmatterOffset, nodes };
+}
+
+/** Builds a ParseError located at `offset` in `source`. */
+export function parseErrorAt(message: string, source: string, offset: number): ParseError {
+  let line = 1;
+  let column = 1;
+  for (let i = 0; i < offset && i < source.length; i++) {
+    if (source[i] === "\n") {
+      line++;
+      column = 1;
+    } else {
+      column++;
+    }
+  }
+  return new ParseError(message, line, column, source, offset);
 }
 
 /**
- * Walks the source to find the closing `---\n` of the frontmatter while
- * IGNORING `---` that appear inside JS string literals, template literals,
- * or comments. Without this, a frontmatter like
- *   ---
- *   const x = `
- *   ---
- *   inner
- *   ---
- *   `
- *   ---
- * would close after the first interior `---`, breaking the parse.
- * Returns null when there is no frontmatter.
+ * Locates the frontmatter with a JavaScript-aware scan (see findFrontmatter):
+ * a `---` inside a string, template literal, comment or regex literal never
+ * closes it. Returns null when there is no frontmatter; throws a located
+ * ParseError when it is unclosed or holds an unterminated construct.
  */
 export function extractFrontmatter(
   source: string,
-): { frontmatter: string; bodyOffset: number } | null {
-  const opener = source.match(/^\s*---\r?\n/);
-  if (!opener) return null;
-  const fmStart = opener[0].length;
-  let i = fmStart;
-  let state: "code" | "single" | "double" | "backtick" | "line-comment" | "block-comment" = "code";
-  let backtickExprDepth = 0;
-
-  function atLineStart(): boolean {
-    return i === fmStart || source[i - 1] === "\n";
+): { frontmatter: string; frontmatterOffset: number; bodyOffset: number } | null {
+  try {
+    const bounds = findFrontmatter(source);
+    if (!bounds) return null;
+    return {
+      frontmatter: source.slice(bounds.start, bounds.end),
+      frontmatterOffset: bounds.start,
+      bodyOffset: bounds.bodyOffset,
+    };
+  } catch (error) {
+    if (error instanceof JsLexError) throw parseErrorAt(error.message, source, error.offset);
+    throw error;
   }
-
-  function isClosingFence(): boolean {
-    if (!atLineStart()) return false;
-    if (!source.startsWith("---", i)) return false;
-    const after = source[i + 3];
-    return after === undefined || after === "\n" || after === "\r";
-  }
-
-  while (i < source.length) {
-    if (state === "code" && isClosingFence()) {
-      const fmEnd = i - 1; // trailing \n before the ---
-      let bodyOffset = i + 3;
-      if (source[bodyOffset] === "\r") bodyOffset++;
-      if (source[bodyOffset] === "\n") bodyOffset++;
-      return { frontmatter: source.slice(fmStart, Math.max(fmStart, fmEnd)), bodyOffset };
-    }
-
-    const ch = source[i]!;
-    const next = source[i + 1];
-
-    switch (state) {
-      case "code":
-        if (ch === '"') state = "double";
-        else if (ch === "'") state = "single";
-        else if (ch === "`") state = "backtick";
-        else if (ch === "/" && next === "/") { state = "line-comment"; i++; }
-        else if (ch === "/" && next === "*") { state = "block-comment"; i++; }
-        i++;
-        break;
-      case "single":
-        if (ch === "\\") i += 2;
-        else if (ch === "'" || ch === "\n") { state = "code"; i++; }
-        else i++;
-        break;
-      case "double":
-        if (ch === "\\") i += 2;
-        else if (ch === '"' || ch === "\n") { state = "code"; i++; }
-        else i++;
-        break;
-      case "backtick":
-        if (ch === "\\") { i += 2; break; }
-        if (ch === "`") { state = "code"; i++; break; }
-        if (ch === "$" && next === "{") {
-          backtickExprDepth = 1;
-          i += 2;
-          while (i < source.length && backtickExprDepth > 0) {
-            const c = source[i]!;
-            if (c === "{") backtickExprDepth++;
-            else if (c === "}") backtickExprDepth--;
-            i++;
-          }
-          break;
-        }
-        i++;
-        break;
-      case "line-comment":
-        if (ch === "\n") state = "code";
-        i++;
-        break;
-      case "block-comment":
-        if (ch === "*" && next === "/") { state = "code"; i += 2; }
-        else i++;
-        break;
-    }
-  }
-  // Unterminated frontmatter — be lenient
-  return { frontmatter: source.slice(fmStart), bodyOffset: source.length };
 }
+
+/** Closing tokens of `{#if}` / `{#each}` blocks, whitespace-tolerant. */
+const CLOSE_IF_RE = /\{\/\s*if\s*\}/y;
+const CLOSE_EACH_RE = /\{\/\s*each\s*\}/y;
+const ELSE_RE = /\{:\s*else\s*\}/y;
+const ELSE_IF_RE = /\{:\s*else\s+if\b/y;
+/** Any `{/name}` or `{:…}` token: these never start a JavaScript expression. */
+const BLOCK_CLOSER_RE = /\{(?:\/\s*[A-Za-z]\w*\s*\}|:)/y;
+const OPEN_BLOCK_RE = /\{#(if|each)(?![\p{ID_Continue}$])/uy;
+const IDENTIFIER_RE = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
+/** Matches `</tag>`; HTML tag names are case-insensitive, component names are not. */
+function closingTagRe(tag: string): RegExp {
+  return new RegExp(`</${tag}\\s*>`, /^[A-Z]/.test(tag) ? "y" : "iy");
+}
+
+const RESERVED_WORDS = new Set([
+  "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default",
+  "delete", "do", "else", "enum", "export", "extends", "false", "finally", "for", "function",
+  "if", "implements", "import", "in", "instanceof", "interface", "let", "new", "null",
+  "package", "private", "protected", "public", "return", "static", "super", "switch", "this",
+  "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield",
+]);
 
 class Scanner {
   private pos = 0;
@@ -210,27 +180,41 @@ class Scanner {
     return this.src.startsWith(s, this.pos);
   }
 
-  private error(message: string): never {
-    const idx = this.offset + this.pos;
-    let line = 1;
-    let column = 1;
-    for (let i = 0; i < idx && i < this.full.length; i++) {
-      if (this.full[i] === "\n") {
-        line++;
-        column = 1;
-      } else {
-        column++;
-      }
-    }
-    throw new ParseError(message, line, column, this.full, idx);
+  /** Length of the match of a sticky regex at the current position, or -1. */
+  private match(re: RegExp): number {
+    re.lastIndex = this.pos;
+    const m = re.exec(this.src);
+    return m ? m[0].length : -1;
   }
 
-  /** Parse nodes until a closing token. `nested` is true inside a block/element. */
+  private error(message: string): never {
+    this.errorAt(message, this.pos);
+  }
+
+  /** Throws a ParseError located at `pos` (an offset in the template body). */
+  private errorAt(message: string, pos: number): never {
+    throw parseErrorAt(message, this.full, this.offset + pos);
+  }
+
+  /** The `{…}` token at the current position, for error messages. */
+  private blockToken(): string {
+    const end = this.src.indexOf("}", this.pos);
+    return end === -1 ? this.src.slice(this.pos, this.pos + 12) : this.src.slice(this.pos, end + 1);
+  }
+
+  /**
+   * Parse nodes until a closing token: an end tag, `{/…}` or `{:…}`.
+   * `nested` is true inside a block/element; at the top level a closing
+   * token is an error.
+   */
   parseNodes(nested: boolean): TemplateNode[] {
     const nodes: TemplateNode[] = [];
     while (!this.eof()) {
-      if (this.startsWith("{/") || this.startsWith("{:") || this.startsWith("</")) {
-        if (!nested) this.error("Unexpected closing token");
+      if (this.startsWith("</") || this.match(BLOCK_CLOSER_RE) >= 0) {
+        if (!nested) {
+          if (this.match(ELSE_RE) >= 0) this.error("Unexpected {:else} outside of an {#if} block");
+          this.error(`Unexpected closing token '${this.startsWith("</") ? "</" : this.blockToken()}'`);
+        }
         break;
       }
       if (this.startsWith("<!--")) {
@@ -247,16 +231,9 @@ class Scanner {
         nodes.push(this.parseTag());
         continue;
       }
-      if (this.startsWith("{#if")) {
-        nodes.push(this.parseIf());
-        continue;
-      }
-      if (this.startsWith("{#each")) {
-        nodes.push(this.parseEach());
-        continue;
-      }
       if (this.src[this.pos] === "{") {
-        nodes.push(this.parseExpression());
+        const node = this.parseBrace();
+        if (node) nodes.push(node);
         continue;
       }
       nodes.push(this.parseText());
@@ -264,55 +241,135 @@ class Scanner {
     return nodes;
   }
 
-  /** Reads from `{` to its matching `}`, returns the inner source. */
-  private readBraced(): string {
-    if (this.src[this.pos] !== "{") this.error("Expected '{'");
-    this.pos++;
-    let depth = 1;
-    let code = "";
-    while (!this.eof()) {
-      const ch = this.src[this.pos]!;
-      if (ch === "{") depth++;
-      else if (ch === "}") {
-        depth--;
-        if (depth === 0) {
-          this.pos++;
-          return code;
-        }
-      }
-      code += ch;
-      this.pos++;
+  /** Dispatches a `{` that is not a closing token. */
+  private parseBrace(): TemplateNode | null {
+    const block = this.match(OPEN_BLOCK_RE) >= 0 ? this.src.slice(this.pos + 2).match(/^\w+/)![0] : null;
+    if (block === "if") return this.parseIf();
+    if (block === "each") return this.parseEach();
+    if (this.startsWith("{#")) {
+      const name = this.src.slice(this.pos + 2).match(/^[\w$]*/)![0];
+      this.error(`Unknown block '{#${name}}': supported blocks are {#if} and {#each}`);
     }
-    this.error("Unclosed '{'");
+    if (this.startsWith("{@")) {
+      const name = this.src.slice(this.pos + 2).match(/^[\w$]*/)![0];
+      this.error(`'{@${name}}' is not supported: bangala has no raw HTML interpolation`);
+    }
+    return this.parseExpression();
   }
 
-  private parseExpression(): TemplateNode {
-    return { type: "Expression", code: this.readBraced() };
+  /** Reads from `{` to its matching `}` and returns the inner source. */
+  private readBraced(): string {
+    const open = this.pos;
+    if (this.src[open] !== "{") this.error("Expected '{'");
+    let close: number;
+    try {
+      close = findClosingBrace(this.src, open + 1);
+    } catch (error) {
+      if (!(error instanceof JsLexError)) throw error;
+      // A quote or backtick in later text can make the lexer fail far away
+      // from the real problem, which is the unclosed brace.
+      const sameLine = !/[\n\r\u2028\u2029]/.test(this.src.slice(open, error.offset));
+      if (sameLine) this.errorAt(error.message, error.offset);
+      this.errorAt("Unclosed '{'", open);
+    }
+    this.pos = close + 1;
+    return this.src.slice(open + 1, close);
+  }
+
+  private parseExpression(): TemplateNode | null {
+    const open = this.pos;
+    const code = this.readBraced();
+    if (tokenize(code).length === 0) {
+      // `{/* note */}` is a template comment; `{}` and `{ }` are mistakes.
+      if (code.trim() === "") this.errorAt("Empty expression", open);
+      return null;
+    }
+    return { type: "Expression", code };
   }
 
   private parseIf(): TemplateNode {
-    const header = this.readBraced().trim(); // "#if condition"
-    const condition = header.slice(3).trim();
-    if (condition === "") this.error("{#if} requires a condition");
+    const open = this.pos;
+    const condition = this.readBraced().replace(/^#if/, "").trim();
+    if (condition === "") this.errorAt("{#if} requires a condition", open);
     const then = this.parseNodes(true);
     let otherwise: TemplateNode[] | null = null;
-    if (this.startsWith("{:else}")) {
-      this.pos += "{:else}".length;
+    const elseLength = this.match(ELSE_RE);
+    if (elseLength >= 0) {
+      this.pos += elseLength;
       otherwise = this.parseNodes(true);
+    } else if (this.match(ELSE_IF_RE) >= 0) {
+      this.error("{:else if} is not supported: nest an {#if} block inside {:else}");
     }
-    if (!this.startsWith("{/if}")) this.error("Unclosed {#if}");
-    this.pos += "{/if}".length;
+    this.closeBlock("if", CLOSE_IF_RE, open);
     return { type: "IfBlock", condition, then, otherwise };
   }
 
   private parseEach(): TemplateNode {
-    const header = this.readBraced().trim(); // "#each list as item"
-    const match = header.match(/^#each\s+(.+?)\s+as\s+(\w+)$/);
-    if (!match) this.error("{#each} must be '{#each <list> as <item>}'");
+    const open = this.pos;
+    const header = this.readBraced().replace(/^#each/, "");
+    const { list, item } = this.parseEachHeader(header, open);
     const body = this.parseNodes(true);
-    if (!this.startsWith("{/each}")) this.error("Unclosed {#each}");
-    this.pos += "{/each}".length;
-    return { type: "EachBlock", list: match![1]!.trim(), item: match![2]!, body };
+    if (this.match(ELSE_RE) >= 0) this.error("{:else} is not supported inside {#each}");
+    this.closeBlock("each", CLOSE_EACH_RE, open);
+    return { type: "EachBlock", list, item, body };
+  }
+
+  /** Splits `<list> as <item>` at the last top-level `as`. */
+  private parseEachHeader(header: string, open: number): { list: string; item: string } {
+    const usage = "{#each} must be '{#each <list> as <item>}'";
+    const tokens = tokenize(header);
+    let depth = 0;
+    let asIndex = -1;
+    tokens.forEach((t, i) => {
+      if (t.kind === "punct" && "([{".includes(t.value)) depth++;
+      else if (t.kind === "punct" && ")]}".includes(t.value)) depth--;
+      else if (depth === 0 && t.kind === "ident" && t.value === "as" && i > 0) asIndex = i;
+    });
+    if (asIndex === -1) this.errorAt(usage, open);
+    const binding = tokens.slice(asIndex + 1);
+    const first = binding[0];
+    if (!first) this.errorAt(usage, open);
+    if (first.kind === "punct" && (first.value === "{" || first.value === "[")) {
+      this.errorAt("Destructuring in {#each} is not supported: write '{#each list as item}' and read item.field", open);
+    }
+    if (binding.length > 1 && binding[1]!.kind === "punct" && binding[1]!.value === ",") {
+      this.errorAt("An index in {#each} is not supported: write '{#each list as item}'", open);
+    }
+    if (binding.length > 1 || first.kind !== "ident" || !IDENTIFIER_RE.test(first.value)) {
+      this.errorAt(usage, open);
+    }
+    if (RESERVED_WORDS.has(first.value) || /^\$\$(?:bangala|render)$/.test(first.value)) {
+      this.errorAt(`'${first.value}' is a reserved word and cannot name the {#each} item`, open);
+    }
+    const list = header.slice(0, tokens[asIndex]!.start).trim();
+    if (list === "") this.errorAt(usage, open);
+    return { list, item: first.value };
+  }
+
+  /** Consumes `{/if}` / `{/each}`, or reports what is wrong. */
+  private closeBlock(name: string, closer: RegExp, open: number): void {
+    const length = this.match(closer);
+    if (length >= 0) {
+      this.pos += length;
+      return;
+    }
+    if (!this.eof() && this.match(BLOCK_CLOSER_RE) >= 0) {
+      this.error(`Unexpected '${this.blockToken()}': expected {/${name}}`);
+    }
+    this.errorAt(`Unclosed {#${name}}`, open);
+  }
+
+  /** Consumes `</tag>` (whitespace before `>` allowed), or reports what is wrong. */
+  private closeTag(tag: string, open: number): void {
+    const length = this.match(closingTagRe(tag));
+    if (length >= 0) {
+      this.pos += length;
+      return;
+    }
+    if (!this.eof() && this.match(BLOCK_CLOSER_RE) >= 0) {
+      this.error(`Unexpected '${this.blockToken()}' inside <${tag}>`);
+    }
+    this.errorAt(`Unclosed <${tag}>`, open);
   }
 
   private skipWhitespace(): void {
@@ -350,7 +407,10 @@ class Scanner {
       if (this.src[this.pos] === "=") {
         this.pos++;
         if (this.src[this.pos] === "{") {
-          attributes.push({ name, value: this.readBraced(), dynamic: true });
+          const open = this.pos;
+          const value = this.readBraced();
+          if (tokenize(value).length === 0) this.errorAt(`Empty expression in attribute '${name}'`, open);
+          attributes.push({ name, value, dynamic: true });
         } else {
           const quote = this.src[this.pos];
           if (quote !== '"' && quote !== "'") this.error("Expected quoted attribute value");
@@ -369,37 +429,33 @@ class Scanner {
   }
 
   private parseTag(): TemplateNode {
+    const open = this.pos;
     this.pos++; // consume "<"
     const tag = this.readName();
     if (tag === "slot") {
       const { selfClosing } = this.parseAttributes();
-      if (!selfClosing) {
-        const close = "</slot>";
-        if (!this.startsWith(close)) this.error("Unclosed <slot>");
-        this.pos += close.length;
-      }
+      if (!selfClosing) this.closeTag("slot", open);
       return { type: "Slot" };
     }
     const { attributes, selfClosing } = this.parseAttributes();
     const isComponent = /^[A-Z]/.test(tag);
     if (isComponent) {
-      return this.finishComponent(tag, attributes, selfClosing);
+      return this.finishComponent(tag, attributes, selfClosing, open);
     }
-    if (selfClosing || VOID_ELEMENTS.has(tag)) {
+    if (selfClosing || VOID_ELEMENTS.has(tag.toLowerCase())) {
       return { type: "Element", tag, attributes, children: [] };
     }
     if (RAW_TEXT_ELEMENTS.has(tag.toLowerCase())) {
-      const close = `</${tag}>`;
-      const end = this.src.indexOf(close, this.pos);
-      if (end === -1) this.error(`Unclosed <${tag}>`);
-      const value = this.src.slice(this.pos, end);
-      this.pos = end + close.length;
+      const close = new RegExp(`</${tag}\\s*>`, "gi");
+      close.lastIndex = this.pos;
+      const end = close.exec(this.src);
+      if (!end) this.errorAt(`Unclosed <${tag}>`, open);
+      const value = this.src.slice(this.pos, end.index);
+      this.pos = end.index + end[0].length;
       return { type: "Element", tag, attributes, children: [{ type: "Text", value }] };
     }
     const children = this.parseNodes(true);
-    const close = `</${tag}>`;
-    if (!this.startsWith(close)) this.error(`Unclosed <${tag}>`);
-    this.pos += close.length;
+    this.closeTag(tag, open);
     return { type: "Element", tag, attributes, children };
   }
 
@@ -407,6 +463,7 @@ class Scanner {
     tag: string,
     attributes: Attribute[],
     selfClosing: boolean,
+    open: number,
   ): TemplateNode {
     const VALID_DIRECTIVES = new Set(["client:load", "client:idle", "client:visible"]);
     const directive = attributes.find((a) => a.name.startsWith("client:"));
@@ -417,9 +474,7 @@ class Scanner {
     let children: TemplateNode[] = [];
     if (!selfClosing) {
       children = this.parseNodes(true);
-      const close = `</${tag}>`;
-      if (!this.startsWith(close)) this.error(`Unclosed <${tag}>`);
-      this.pos += close.length;
+      this.closeTag(tag, open);
     }
     return {
       type: "Component",
