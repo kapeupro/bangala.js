@@ -155,6 +155,24 @@ describe("bangala CLI", () => {
     await expect(stat(join(root, "dist/index.html"))).resolves.toBeTruthy();
     await expect(stat(join(root, "dist/assets/bangala-client.js"))).resolves.toBeTruthy();
   });
+
+  it("refuses to build into the project root and reports why", async () => {
+    const root = join(tmpRoot(), "site");
+    const out: string[] = [];
+    const err: string[] = [];
+    await createProject(root, { packageVersion: "0.4.0" });
+
+    const code = await main(
+      ["build", "--root", root, "--out-dir", "."],
+      { stdout: (line) => out.push(line), stderr: (line) => err.push(line) },
+    );
+
+    expect(code).toBe(1);
+    expect(out.join("\n")).not.toContain("built");
+    expect(err.join("\n")).toContain(`Refusing to use outDir '${root}'`);
+    expect(err.join("\n")).toContain("project root");
+    await expect(stat(join(root, "pages/index.bangala"))).resolves.toBeTruthy();
+  });
 });
 
 describe("cli-net findFreePort", () => {
