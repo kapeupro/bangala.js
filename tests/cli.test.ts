@@ -154,6 +154,13 @@ describe("bangala CLI", () => {
     expect(out.join("\n")).toContain("built 1 page(s)");
     await expect(stat(join(root, "dist/index.html"))).resolves.toBeTruthy();
     await expect(stat(join(root, "dist/assets/bangala-client.js"))).resolves.toBeTruthy();
+
+    // The starter's <Counter client:load/> is hydrated by its bundled client module.
+    const html = await readFile(join(root, "dist/index.html"), "utf8");
+    const entry = html.match(/data-entry="(\/assets\/islands\/Counter\.client-[^"]+\.js)"/)?.[1];
+    expect(entry).toBeDefined();
+    await expect(readFile(join(root, "dist", entry!), "utf8")).resolves.toContain("mount");
+    expect(html).toContain('<script type="module" src="/assets/bangala-client.js"></script>');
   });
 
   it("refuses to build into the project root and reports why", async () => {

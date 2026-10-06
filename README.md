@@ -343,6 +343,25 @@ on the affected `<bangala-island>` element, whose `detail` matches the
 `HydrationError` passed to `onError`. A throw from `onError` is swallowed so it
 cannot break the rest of the page.
 
+### Islands
+
+Add `client:load`, `client:idle` or `client:visible` to a component to make
+it an island. Its browser code lives next to it: `Counter.bangala` renders
+the server HTML, and the sibling `Counter.client.ts` (or `.tsx`, `.mts`,
+`.js`, `.jsx`, `.mjs`) exports `mount`.
+
+```bangala
+---
+import Counter from "../components/Counter.bangala"
+---
+<Counter start={0} client:load/>
+```
+
+The dev server serves the client module as source. `bangala build` bundles
+only the islands your pages use into `assets/islands/` and rewrites each
+`data-entry`. Pages without islands ship no JavaScript: the client runtime is
+only added where a `<bangala-island>` appears.
+
 ### Island module contract
 
 An island is an ESM module that exports an async `mount` function:

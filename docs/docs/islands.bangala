@@ -32,8 +32,17 @@ const manual = [
   "});",
 ].join("\n");
 
+const layout = [
+  "components/",
+  "  Counter.bangala      # server HTML (the SSR shell)",
+  "  Counter.client.ts    # browser code: exports mount()",
+  "pages/",
+  "  index.bangala        # <Counter start={10} client:load />",
+].join("\n");
+
 const headings = [
   { id: "model", label: "Model" },
+  { id: "client-module", label: "Client module" },
   { id: "strategies", label: "Strategies" },
   { id: "mount-contract", label: "Mount contract" },
   { id: "errors", label: "Errors" },
@@ -54,6 +63,10 @@ const headings = [
   <p>A component without a client directive renders to static HTML and ships no client module. Add <code>client:load</code>, <code>client:idle</code>, or <code>client:visible</code> and the compiler emits a <code>&lt;bangala-island&gt;</code> marker with props, entry, and strategy.</p>
   <CodeBlock filename="pages/index.bangala" code={page}/>
 
+  <h2 id="client-module">Client module</h2>
+  <p>An island's browser code lives next to its component: <code>Counter.bangala</code> is hydrated by <code>Counter.client.ts</code> (or <code>.tsx</code>, <code>.mts</code>, <code>.js</code>, <code>.jsx</code>, <code>.mjs</code>). The dev server serves it as source, and <code>bangala build</code> bundles only the islands your pages actually use into <code>assets/islands/</code>. Pages without islands ship no JavaScript at all: the runtime is only added where a <code>&lt;bangala-island&gt;</code> appears.</p>
+  <CodeBlock filename="project layout" lang="text" code={layout}/>
+
   <h2 id="strategies">Strategies</h2>
   <table class="docs-table">
     <thead><tr><th>Directive</th><th>Hydrates</th><th>Use for</th></tr></thead>
@@ -66,12 +79,12 @@ const headings = [
 
   <h2 id="mount-contract">Mount contract</h2>
   <p>The browser module exports <code>mount(el, props, ctx)</code>. <code>el</code> is the island marker with the SSR HTML still inside it, <code>props</code> is parsed JSON, and <code>ctx</code> includes <code>strategy</code> and <code>entry</code>.</p>
-  <CodeBlock filename="public/islands/counter.js" lang="js" code={mount}/>
+  <CodeBlock filename="components/Counter.client.js" lang="js" code={mount}/>
 
   <h2 id="errors">Errors</h2>
   <p>Hydration failures are observable through <code>console.error</code>, <code>data-hydration-error</code>, an optional <code>onError</code> callback, and a bubbling <code>bangala:island-error</code> event.</p>
 
   <h2 id="manual-hydration">Manual hydration</h2>
-  <p>The Vite build injects <code>bangala/client/auto</code>. Custom integrations can call <code>hydrate()</code> directly.</p>
+  <p>The dev server and the build add <code>bangala/client/auto</code> to pages that contain islands. Custom integrations can call <code>hydrate()</code> directly, and a hand-written <code>&lt;bangala-island data-entry="/islands/x.js"&gt;</code> marker still works for modules served from <code>public/</code>.</p>
   <CodeBlock filename="client.js" lang="js" code={manual}/>
 </DocsLayout>

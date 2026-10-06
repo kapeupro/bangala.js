@@ -122,7 +122,13 @@ const isIdent = (t: Token | undefined, value: string) => t?.kind === "ident" && 
 const unquote = (t: Token) => t.value.slice(1, -1);
 const withoutQuery = (specifier: string) => specifier.split("?", 1)[0]!;
 
-export function analyzeFrontmatter(source: string): FrontmatterModel {
+export interface FrontmatterOptions {
+  /** Rewrite `.bangala` specifiers to `.js` (default true). */
+  rewriteBangalaImports?: boolean;
+}
+
+export function analyzeFrontmatter(source: string, options: FrontmatterOptions = {}): FrontmatterModel {
+  const rewrite = options.rewriteBangalaImports ?? true;
   const tokens = tokenize(source);
   const hoisted: HoistedStatement[] = [];
   const imports: ImportRecord[] = [];
@@ -154,7 +160,7 @@ export function analyzeFrontmatter(source: string): FrontmatterModel {
     if (!BANGALA_SPECIFIER.test(t.value)) return;
     if (t.kind === "template" && t.value.includes("${")) return;
     dependencies.add(withoutQuery(unquote(t)));
-    edits.push({ start: t.start, end: t.end, text: t.value.replace(BANGALA_SPECIFIER, ".js") });
+    if (rewrite) edits.push({ start: t.start, end: t.end, text: t.value.replace(BANGALA_SPECIFIER, ".js") });
   }
 
   /**

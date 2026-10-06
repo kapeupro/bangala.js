@@ -1,13 +1,15 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   build as viteBuild,
   createServer as createViteServer,
   mergeConfig,
+  transformWithEsbuild,
   type InlineConfig,
   type Plugin,
+  type Rollup,
   type ViteDevServer,
 } from "vite";
 import { compile } from "./index.js";
@@ -65,38 +67,81 @@ export interface BangalaBuildResult {
 const CLIENT_ENTRY_NAME = "bangala-client";
 const CLIENT_ENTRY_FILE = `assets/${CLIENT_ENTRY_NAME}.js`;
 
+/** Extensions tried, in order, for an island's client module. */
+const CLIENT_MODULE_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".jsx", ".mjs"];
+
+/**
+ * Finds the client module of an island component: `Counter.bangala` is
+ * hydrated by the sibling `Counter.client.ts` (or `.tsx`, `.mts`, `.js`,
+ * `.jsx`, `.mjs`), which exports `mount(el, props, ctx)`.
+ */
+export function findIslandClientModule(componentFile: string): string | null {
+  const base = componentFile.replace(/\.bangala$/, "");
+  for (const extension of CLIENT_MODULE_EXTENSIONS) {
+    const candidate = `${base}.client${extension}`;
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** Maps an island's client module (absolute path) to its `data-entry` URL. */
+type IslandUrl = (clientModule: string) => string;
+
 export function bangala(options: BangalaPluginOptions = {}): Plugin {
+  return bangalaPlugin(options);
+}
+
+function bangalaPlugin(options: BangalaPluginOptions, buildIslandUrl?: IslandUrl): Plugin {
   let projectRoot = process.cwd();
+  let base = "/";
   let pagesRoot: string | null = null;
   const injectClient = options.injectClient ?? true;
+
+  // In dev, Vite serves source files at their root-relative URL (or under
+  // /@fs/ outside the root) and transpiles TypeScript on request.
+  const devIslandUrl: IslandUrl = (file) => {
+    const fromRoot = relative(projectRoot, file);
+    const url = isWithin(file, projectRoot) ? toPosix(fromRoot) : `@fs/${toPosix(file).replace(/^\//, "")}`;
+    return `${base}${url}`;
+  };
 
   return {
     name: "bangala",
     enforce: "pre",
     configResolved(config) {
       projectRoot = config.root;
+      base = config.base.endsWith("/") ? config.base : `${config.base}/`;
       pagesRoot = options.pages === false
         ? null
         : resolve(projectRoot, options.pages ?? "pages");
     },
-    resolveId(source, importer) {
-      const internal = resolveBangalaInternal(source);
-      if (internal) return internal;
-      if (importer && source.endsWith(".js")) {
-        const candidate = resolve(dirname(cleanId(importer)), source.replace(/\.js$/, ".bangala"));
-        if (existsSync(candidate)) return candidate;
-      }
-      return null;
+    resolveId(source) {
+      return resolveBangalaInternal(source);
     },
     async load(id) {
       const file = cleanId(id);
       if (!file.endsWith(".bangala")) return null;
       const source = await readFile(file, "utf8");
-      const result = compile(source, { filename: file });
+      const islandUrl = buildIslandUrl ?? devIslandUrl;
+      const result = compile(source, {
+        filename: file,
+        // Vite resolves `.bangala` imports itself, through this plugin's load().
+        rewriteBangalaImports: false,
+        islandEntry: (specifier) => islandUrl(islandClientModule(file, specifier, projectRoot)),
+      });
       for (const dependency of result.dependencies) {
-        this.addWatchFile(resolve(dirname(file), dependency));
+        if (/^\.{1,2}\//.test(dependency)) this.addWatchFile(resolve(dirname(file), dependency));
       }
-      return { code: result.code, map: null };
+      // The frontmatter may be TypeScript; Vite only transpiles .ts ids.
+      const { code } = await transformWithEsbuild(result.code, `${file}.ts`, { loader: "ts" });
+      return { code, map: null };
+    },
+    handleHotUpdate({ file, server }) {
+      // Pages and components render on the server, so no client module can
+      // accept their update: reload the page instead.
+      if (!file.endsWith(".bangala")) return undefined;
+      server.ws.send({ type: "full-reload" });
+      return [];
     },
     configureServer(server) {
       if (!pagesRoot) return undefined;
@@ -116,7 +161,7 @@ export function bangala(options: BangalaPluginOptions = {}): Plugin {
             }
 
             let html = await renderMatchedRoute(server, match);
-            if (injectClient) html = injectDevClient(html);
+            if (injectClient && hasIsland(html)) html = injectDevClient(html);
             html = await server.transformIndexHtml(match.pathname, html);
 
             res.statusCode = 200;
@@ -140,12 +185,16 @@ export async function createBangalaDevServer(
   options: BangalaDevServerOptions = {},
 ): Promise<ViteDevServer> {
   const root = resolve(options.root ?? process.cwd());
+  // A standalone dev server reloads the page when a .bangala file changes.
+  // In middleware mode the host server owns the connection, so live reload
+  // stays off unless the caller configures it.
+  const live = !options.vite?.server?.middlewareMode;
   const config = mergeConfig(
     {
       root,
       configFile: false,
       appType: "custom",
-      server: { hmr: false, ws: false },
+      server: live ? {} : { hmr: false, ws: false },
       plugins: [bangala({ pages: options.pages ?? "pages", injectClient: options.injectClient })],
     } satisfies InlineConfig,
     options.vite ?? {},
@@ -175,20 +224,71 @@ export async function buildBangala(
     );
   }
 
+  // Pages render first, so the islands they actually use are known before
+  // the client bundle is built. Their `data-entry` holds a placeholder until
+  // the bundle names the files.
+  const islandModules: string[] = [];
+  const islandUrl: IslandUrl = (file) => {
+    let index = islandModules.indexOf(file);
+    if (index === -1) index = islandModules.push(file) - 1;
+    return `${ISLAND_PLACEHOLDER}${index}/`;
+  };
+
+  const server = await createViteServer(mergeConfig(
+    {
+      root,
+      configFile: false,
+      appType: "custom",
+      server: { middlewareMode: true, hmr: false, ws: false },
+      plugins: [bangalaPlugin({ pages: false }, islandUrl)],
+    } satisfies InlineConfig,
+    options.vite ?? {},
+  ));
+
+  const routes = await discoverRoutes(pagesRoot);
+  const rendered: { pathname: string; file: string; match: RouteMatch; html: string }[] = [];
+  try {
+    const pathnames = await pathnamesToPrerender(server, routes, options.prerender ?? []);
+    for (const pathname of pathnames) {
+      const match = matchRoute(routes, pathname);
+      if (!match) throw new Error(`No route matches prerender path '${pathname}'`);
+      const file = outputFileForPathname(outDir, pathname);
+      assertSafePrerenderTarget(outDir, pathname, match, file);
+      rendered.push({ pathname, file, match, html: await renderMatchedRoute(server, match) });
+    }
+  } finally {
+    await server.close();
+  }
+
+  const base = normalizeBase(options.vite?.base);
+  const islandFiles = new Map<string, string>();
   if (buildClient) {
-    await viteBuild(mergeConfig(
+    const input: Record<string, string> = { [CLIENT_ENTRY_NAME]: "bangala/client/auto" };
+    const islandInputs = new Set<string>();
+    islandModules.forEach((file, index) => {
+      // Rollup input names must be unique; the file name stays readable.
+      let name = `islands/${basename(file).replace(/\.[^.]+$/, "")}`;
+      if (islandInputs.has(name)) name = `${name}-${index}`;
+      islandInputs.add(name);
+      input[name] = file;
+    });
+    const output = await viteBuild(mergeConfig(
       {
         root,
         configFile: false,
         appType: "custom",
+        logLevel: "warn",
         plugins: [bangala({ pages: false })],
         build: {
           outDir,
           emptyOutDir,
           rollupOptions: {
-            input: { [CLIENT_ENTRY_NAME]: "bangala/client/auto" },
+            input,
+            // Keep island exports (`mount`) even though no other entry imports them.
+            preserveEntrySignatures: "exports-only",
             output: {
-              entryFileNames: "assets/[name].js",
+              entryFileNames: (chunk) =>
+                chunk.name === CLIENT_ENTRY_NAME ? "assets/[name].js" : "assets/[name]-[hash].js",
               chunkFileNames: "assets/[name]-[hash].js",
               assetFileNames: "assets/[name]-[hash][extname]",
             },
@@ -197,44 +297,52 @@ export async function buildBangala(
       } satisfies InlineConfig,
       options.vite ?? {},
     ));
-  } else if (emptyOutDir) {
-    await rm(outDir, { recursive: true, force: true });
-  }
-
-  const server = await createViteServer({
-    root,
-    configFile: false,
-    appType: "custom",
-    server: { middlewareMode: true, hmr: false, ws: false },
-    plugins: [bangala({ pages: false })],
-  });
-
-  try {
-    const routes = await discoverRoutes(pagesRoot);
-    const pathnames = await pathnamesToPrerender(server, routes, options.prerender ?? []);
-    const pages: BuiltPage[] = [];
-
-    for (const pathname of pathnames) {
-      const match = matchRoute(routes, pathname);
-      if (!match) throw new Error(`No route matches prerender path '${pathname}'`);
-      const file = outputFileForPathname(outDir, pathname);
-      assertSafePrerenderTarget(outDir, pathname, match, file);
-      let html = await renderMatchedRoute(server, match);
-      if (injectClient && buildClient) html = injectBuildClient(html, `/${CLIENT_ENTRY_FILE}`);
-      await mkdir(dirname(file), { recursive: true });
-      await writeFile(file, html);
-      pages.push({ pathname: match.pathname, file, route: match.route, params: match.params });
+    for (const result of Array.isArray(output) ? output : [output as Rollup.RollupOutput]) {
+      for (const item of result.output ?? []) {
+        if (item.type === "chunk" && item.isEntry && item.facadeModuleId) {
+          islandFiles.set(item.facadeModuleId, item.fileName);
+        }
+      }
     }
-
-    return {
-      outDir,
-      routes,
-      pages,
-      clientEntry: buildClient ? join(outDir, CLIENT_ENTRY_FILE) : null,
-    };
-  } finally {
-    await server.close();
+  } else {
+    if (emptyOutDir) await rm(outDir, { recursive: true, force: true });
+    if (islandModules.length > 0) {
+      console.warn(
+        `bangala: ${islandModules.length} island client module(s) are not bundled because the client build is disabled; ` +
+          "their data-entry points at the source files.",
+      );
+    }
   }
+
+  const pages: BuiltPage[] = [];
+  for (const { pathname, file, match, html: renderedHtml } of rendered) {
+    let html = renderedHtml.replace(ISLAND_PLACEHOLDER_RE, (_, index: string) => {
+      const source = islandModules[Number(index)]!;
+      const built = islandFiles.get(source);
+      return built ? `${base}${built}` : `${base}${toPosix(relative(root, source))}`;
+    });
+    if (injectClient && buildClient && hasIsland(html)) html = injectBuildClient(html, `${base}${CLIENT_ENTRY_FILE}`);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, html);
+    pages.push({ pathname: match.pathname, file, route: match.route, params: match.params });
+  }
+
+  return {
+    outDir,
+    routes,
+    pages,
+    clientEntry: buildClient ? join(outDir, CLIENT_ENTRY_FILE) : null,
+  };
+}
+
+/** Placeholder written in `data-entry` while pages prerender, before islands are bundled. */
+const ISLAND_PLACEHOLDER = "/@bangala-island/";
+const ISLAND_PLACEHOLDER_RE = /\/@bangala-island\/(\d+)\//g;
+
+function normalizeBase(base: string | undefined): string {
+  if (!base || base === "./" || base === "") return "/";
+  const withLeading = base.startsWith("/") || /^[a-z]+:\/\//i.test(base) ? base : `/${base}`;
+  return withLeading.endsWith("/") ? withLeading : `${withLeading}/`;
 }
 
 async function renderMatchedRoute(
@@ -493,6 +601,38 @@ function localFile(name: string): string {
 
 function cleanId(id: string): string {
   return id.split("?", 1)[0]!;
+}
+
+function toPosix(path: string): string {
+  return path.split(sep).join("/");
+}
+
+/** True when the HTML holds an island marker, i.e. needs the client runtime. */
+function hasIsland(html: string): boolean {
+  return /<bangala-island[\s>]/i.test(html);
+}
+
+/**
+ * Resolves the client module of the island component imported as
+ * `specifier` from `importer`, or explains what is missing.
+ */
+function islandClientModule(importer: string, specifier: string, root: string): string {
+  let componentFile: string;
+  if (/^\.{1,2}\//.test(specifier)) componentFile = resolve(dirname(importer), specifier);
+  else if (specifier.startsWith("/")) componentFile = join(root, specifier);
+  else {
+    throw new Error(
+      `Island component "${specifier}" in '${importer}' must be imported with a relative path ` +
+        `('./' or '../') so its client module can be found next to it`,
+    );
+  }
+  const clientModule = findIslandClientModule(componentFile);
+  if (clientModule) return clientModule;
+  const name = basename(componentFile).replace(/\.bangala$/, "");
+  throw new Error(
+    `Island <${name}> in '${importer}' has no client module. Create '${name}.client.ts' (or .js) ` +
+      `next to '${componentFile}', exporting mount(el, props).`,
+  );
 }
 
 export { type FileRoute } from "./router.js";

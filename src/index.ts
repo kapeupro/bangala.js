@@ -9,7 +9,7 @@ export { ParseError } from "./parser.js";
 
 export function compile(source: string, options: CompileOptions): CompileResult {
   const template = parse(source, options.filename);
-  const frontmatter = modelFrontmatter(template, source);
+  const frontmatter = modelFrontmatter(template, source, options);
   const analysis = analyze(template, frontmatter);
   const code = generate(template, frontmatter, options);
   return {
@@ -20,9 +20,9 @@ export function compile(source: string, options: CompileOptions): CompileResult 
 }
 
 /** Builds the frontmatter model, reporting problems as located ParseErrors. */
-function modelFrontmatter(template: Template, source: string): FrontmatterModel {
+function modelFrontmatter(template: Template, source: string, options: CompileOptions): FrontmatterModel {
   try {
-    return analyzeFrontmatter(template.frontmatter);
+    return analyzeFrontmatter(template.frontmatter, { rewriteBangalaImports: options.rewriteBangalaImports });
   } catch (error) {
     if (error instanceof FrontmatterError) {
       throw parseErrorAt(error.message, source, template.frontmatterOffset + error.offset);

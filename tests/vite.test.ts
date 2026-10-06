@@ -126,7 +126,8 @@ describe("createBangalaDevServer", () => {
       expect(response.contentType).toContain("text/html");
       expect(response.html).toContain("<h1>hello</h1>");
       expect(response.html).toContain("/@vite/client");
-      expect(response.html).toContain("html-proxy");
+      // No island on the page, so no client runtime is injected.
+      expect(response.html).not.toContain("html-proxy");
       expect(response.nextCalled).toBe(false);
     } finally {
       await vite.close();

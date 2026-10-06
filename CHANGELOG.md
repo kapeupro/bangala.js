@@ -6,10 +6,15 @@ All notable changes to bangala.js are documented here. Format follows [Keep a Ch
 
 ### Added
 
+- **Islands work end to end.** `<Counter client:load/>` is hydrated by the sibling `Counter.client.ts` (or `.tsx`, `.mts`, `.js`, `.jsx`, `.mjs`) exporting `mount()`. The dev server serves it as source; `buildBangala()` / `bangala build` bundles only the islands that pages use into `assets/islands/` and rewrites each `data-entry`. A missing client module is a clear error. Before, the compiler emitted `data-entry="./Counter"`, which no browser could load, and the starter hand-wrote its `<bangala-island>` marker.
+- **Live reload in `bangala dev`.** Editing a `.bangala` file reloads the page. The dev server no longer disables Vite's WebSocket, which logged connection errors on every page.
+- `compile()` options `islandEntry` (map an island component to its `data-entry` URL) and `rewriteBangalaImports` (keep `.bangala` specifiers for bundlers that load them).
 - `emptyOutDir` option for `buildBangala()`, mirroring Vite: defaults to `true` when `outDir` is inside the project root; an `outDir` outside the root is only emptied when `emptyOutDir: true` is passed (otherwise existing files are kept and a single warning is printed).
 
 ### Fixed
 
+- TypeScript in the frontmatter now works through the Vite plugin (dev and build); the generated module is transpiled before Vite sees it.
+- `buildBangala()` applies `options.vite` (plugins, `define`, aliases…) when prerendering pages, not only to the client bundle, and prefixes asset URLs with `vite.base`.
 - **The frontmatter is parsed as JavaScript, not as lines of text.** A small JavaScript/TypeScript lexer (`src/jslex.ts`) now drives the frontmatter fence, `import`/`export` hoisting and template `{expr}` scanning, so strings, template literals, comments and regex literals can hold `---`, `{`, `}`, `import` or `export` safely.
   - The frontmatter is emitted byte for byte. Multi-line template literals and line continuations are no longer re-indented (#2).
   - Imports work with CRLF line endings, on several lines, several per line, without spaces (`import{a}from"x"`), with `with { type: "json" }`, and in every clause form (`import X, { y }`, `import { default as X }`, `import * as X`).
@@ -30,12 +35,14 @@ All notable changes to bangala.js are documented here. Format follows [Keep a Ch
 
 ### Changed
 
+- The client runtime is only injected into pages that contain an island, so static pages ship no JavaScript (dev and build).
+- `bangala create` scaffolds `<Counter start={0} client:load/>` with `components/Counter.client.js` instead of a hand-written marker and `public/islands/Counter.client.js`.
+- The Vite plugin keeps `.bangala` import specifiers and no longer redirects `./x.js` imports to a sibling `x.bangala`, which hid real `.js` modules; root-absolute and package `.bangala` imports now resolve.
 - A frontmatter without a closing `---` line is now an error instead of swallowing the whole template.
 - `export default`, exporting `render`, `export { local }` for a non-exported frontmatter local, a `children` component prop and the identifiers `$$bangala` / `$$render` are now compile errors.
 - `{}` is an error, and `{/* comment */}` renders nothing (it used to render `undefined`).
 - The generated module's shape changed (`$$bangala.escape(…)`, `$$render`); it still exports `render` and a default `{ render }`. The runtime helpers `escape`, `island` and `renderComponent` are no longer implicitly in scope in the frontmatter: import what you use from `bangala/runtime` (an unimported `escape()` would now call the browser's legacy global).
 - An `{#each}` item may not be named `props`.
-
 
 ## [1.0.0] - 2026-05-24
 

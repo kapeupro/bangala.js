@@ -85,7 +85,7 @@ const VOID_ELEMENTS = new Set([
 export function generate(
   template: Template,
   frontmatter: FrontmatterModel,
-  _options: CompileOptions,
+  options: CompileOptions,
 ): string {
   const byName = new Map(frontmatter.components.map((c) => [c.name, c.path]));
 
@@ -131,7 +131,8 @@ export function generate(
       case "Component": {
         const props = attrsToObject(node.attributes);
         if (node.island) {
-          const path = byName.get(node.name)!.replace(/\.bangala$/, "");
+          const specifier = byName.get(node.name)!;
+          const path = options.islandEntry ? options.islandEntry(specifier) : specifier.replace(/\.bangala$/, "");
           return `\${await ${RUNTIME}.island(${node.name}, ${props}, ${JSON.stringify(path)}, ${JSON.stringify(node.strategy!)})}`;
         }
         const children =
