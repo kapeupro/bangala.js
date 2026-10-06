@@ -259,6 +259,8 @@ await server.listen(5173);
 Bundles `bangala/client/auto` and prerenders HTML files into `outDir`.
 Static routes are prerendered by default. Dynamic routes can opt into static
 generation by exporting `getStaticPaths()` from the page module.
+Like Vite, `outDir` is emptied first only when it is inside `root`; pass
+`emptyOutDir: true` to also empty an `outDir` outside the project.
 
 ```ts
 await buildBangala({

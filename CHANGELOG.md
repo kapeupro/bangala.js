@@ -4,6 +4,10 @@ All notable changes to bangala.js are documented here. Format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- `emptyOutDir` option for `buildBangala()`, mirroring Vite: defaults to `true` when `outDir` is inside the project root; an `outDir` outside the root is only emptied when `emptyOutDir: true` is passed (otherwise existing files are kept and a single warning is printed).
+
 ### Fixed
 
 - **The frontmatter is parsed as JavaScript, not as lines of text.** A small JavaScript/TypeScript lexer (`src/jslex.ts`) now drives the frontmatter fence, `import`/`export` hoisting and template `{expr}` scanning, so strings, template literals, comments and regex literals can hold `---`, `{`, `}`, `import` or `export` safely.
@@ -21,6 +25,8 @@ All notable changes to bangala.js are documented here. Format follows [Keep a Ch
 - Block tokens tolerate whitespace (`{/if }`, `{:else }`), and closing tags accept whitespace and any letter case (`</div >`, `</DIV>`).
 - Errors are clearer and point at the cause: unclosed tags, blocks and braces are reported at their opener with the real closing tag as suggestion; unterminated strings, template literals and comments in the frontmatter are located; `{:else if}`, `{@html}`, unknown blocks (`{#iff}`), misplaced `{:else}`, mismatched block closers, `{#each}` destructuring or index, and components imported from non-`.bangala` modules get dedicated messages.
 - The docs blog recipe exported `getStaticPaths()` without exporting the `posts` it reads.
+- `buildBangala()` / `bangala build` no longer delete project sources when `outDir` points at the wrong place. An `outDir` that is the project root (`.`), an ancestor of it (`..`), the filesystem root, or that overlaps the pages directory or Vite's `public/` directory is now rejected with an error naming the resolved path, before anything is removed. An `outDir` outside the project root is no longer silently emptied.
+- Prerendering can no longer write outside `outDir` or overwrite other pages. `getStaticPaths()` param values (and each catch-all item) must be single, non-empty path segments: empty strings, `.`, `..`, `/`, `\` and NUL bytes are rejected with an error naming the route file. Pathnames from the `prerender` option are checked the same way (including percent-encoded `%2E%2E`), and every output file is verified to resolve inside `outDir`.
 
 ### Changed
 
@@ -29,6 +35,7 @@ All notable changes to bangala.js are documented here. Format follows [Keep a Ch
 - `{}` is an error, and `{/* comment */}` renders nothing (it used to render `undefined`).
 - The generated module's shape changed (`$$bangala.escape(…)`, `$$render`); it still exports `render` and a default `{ render }`. The runtime helpers `escape`, `island` and `renderComponent` are no longer implicitly in scope in the frontmatter: import what you use from `bangala/runtime` (an unimported `escape()` would now call the browser's legacy global).
 - An `{#each}` item may not be named `props`.
+
 
 ## [1.0.0] - 2026-05-24
 

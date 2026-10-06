@@ -1,9 +1,9 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "vite";
 import {
   bangala,
@@ -14,6 +14,7 @@ import {
 let tmpRoots: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const root of tmpRoots) rmSync(root, { recursive: true, force: true });
   tmpRoots = [];
 });
@@ -163,19 +164,19 @@ describe("buildBangala", () => {
 
     const result = await buildBangala({
       root,
-      outDir: "public",
+      outDir: "dist",
       prerender: ["/blog/first-post"],
     });
 
     expect(result.pages.map((page) => page.pathname)).toEqual(["/", "/about", "/blog/first-post"]);
-    expect(await readFile(join(root, "public/index.html"), "utf8")).toContain("<h1>Home</h1>");
-    expect(await readFile(join(root, "public/about/index.html"), "utf8")).toContain(
+    expect(await readFile(join(root, "dist/index.html"), "utf8")).toContain("<h1>Home</h1>");
+    expect(await readFile(join(root, "dist/about/index.html"), "utf8")).toContain(
       "<p>About</p>",
     );
-    expect(await readFile(join(root, "public/blog/first-post/index.html"), "utf8")).toContain(
+    expect(await readFile(join(root, "dist/blog/first-post/index.html"), "utf8")).toContain(
       "<h1>first-post</h1>",
     );
-    await expect(stat(join(root, "public/assets/bangala-client.js"))).resolves.toBeTruthy();
+    await expect(stat(join(root, "dist/assets/bangala-client.js"))).resolves.toBeTruthy();
   });
 
   it("prerenders nested layouts outermost first", async () => {
@@ -228,5 +229,244 @@ describe("buildBangala", () => {
     const result = await buildBangala({ root, outDir: "out" });
 
     expect(result.pages.map((p) => p.pathname).sort()).toEqual(["/"]);
+  });
+});
+
+/**
+ * Creates `<tmp>/project` with a home page, so tests that point outDir at an
+ * ancestor of the project can only ever touch the throwaway parent folder.
+ */
+function tmpProject(): { parent: string; root: string } {
+  const parent = tmpRoot();
+  const root = join(parent, "project");
+  write(root, "pages/index.bangala", "<h1>Home</h1>");
+  return { parent, root };
+}
+
+describe("buildBangala outDir safety", () => {
+  it.each([
+    ["'.'", () => ".", (root: string) => root, /is the project root/],
+    ["the absolute project root", (root: string) => root, (root: string) => root, /is the project root/],
+    ["'..'", () => "..", (root: string) => join(root, ".."), /contains the project root/],
+    ["the pages directory", () => "pages", (root: string) => join(root, "pages"), /pages directory/],
+    ["a folder inside pages", () => "pages/out", (root: string) => join(root, "pages/out"), /pages directory/],
+    ["the public directory", () => "public", (root: string) => join(root, "public"), /public directory/],
+  ])("refuses %s as outDir without deleting anything", async (_label, outDir, resolved, why) => {
+    const { root } = tmpProject();
+    write(root, "public/islands/Counter.client.js", "export default {}");
+
+    const promise = buildBangala({ root, outDir: outDir(root) });
+
+    await expect(promise).rejects.toThrow(why);
+    await expect(promise).rejects.toThrow(`'${resolved(root)}'`);
+    expect(existsSync(join(root, "pages/index.bangala"))).toBe(true);
+    expect(existsSync(join(root, "public/islands/Counter.client.js"))).toBe(true);
+  });
+
+  it("refuses an outDir that contains a nested pages directory", async () => {
+    const root = tmpRoot();
+    write(root, "src/pages/index.bangala", "<h1>Home</h1>");
+
+    const promise = buildBangala({ root, pages: "src/pages", outDir: "src", client: false });
+
+    await expect(promise).rejects.toThrow(/pages directory/);
+    await expect(promise).rejects.toThrow(join(root, "src"));
+    expect(existsSync(join(root, "src/pages/index.bangala"))).toBe(true);
+  });
+
+  it("keeps existing files in an outDir outside the project root and warns once", async () => {
+    const { parent, root } = tmpProject();
+    const outDir = join(parent, "site");
+    write(outDir, "keep.txt", "not ours");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await buildBangala({ root, outDir });
+
+    expect(existsSync(join(outDir, "keep.txt"))).toBe(true);
+    expect(await readFile(join(outDir, "index.html"), "utf8")).toContain("<h1>Home</h1>");
+    await expect(stat(join(outDir, "assets/bangala-client.js"))).resolves.toBeTruthy();
+    const notices = warn.mock.calls.filter(([message]) => String(message).includes("not be emptied"));
+    expect(notices).toHaveLength(1);
+    expect(String(notices[0]![0])).toContain(outDir);
+  });
+
+  it("keeps existing files outside the project root when the client build is skipped", async () => {
+    const { parent, root } = tmpProject();
+    const outDir = join(parent, "site");
+    write(outDir, "keep.txt", "not ours");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await buildBangala({ root, outDir, client: false });
+
+    expect(existsSync(join(outDir, "keep.txt"))).toBe(true);
+    expect(await readFile(join(outDir, "index.html"), "utf8")).toContain("<h1>Home</h1>");
+  });
+
+  it("empties an outDir outside the project root when emptyOutDir is true", async () => {
+    const { parent, root } = tmpProject();
+    const outDir = join(parent, "site");
+    write(outDir, "stale.txt", "old build");
+
+    await buildBangala({ root, outDir, client: false, emptyOutDir: true });
+
+    expect(existsSync(join(outDir, "stale.txt"))).toBe(false);
+    expect(await readFile(join(outDir, "index.html"), "utf8")).toContain("<h1>Home</h1>");
+  });
+
+  it("empties an outDir inside the project root by default, unless emptyOutDir is false", async () => {
+    const { root } = tmpProject();
+    write(root, "out/stale.txt", "old build");
+
+    await buildBangala({ root, outDir: "out", client: false, emptyOutDir: false });
+    expect(existsSync(join(root, "out/stale.txt"))).toBe(true);
+
+    await buildBangala({ root, outDir: "out", client: false });
+    expect(existsSync(join(root, "out/stale.txt"))).toBe(false);
+    expect(await readFile(join(root, "out/index.html"), "utf8")).toContain("<h1>Home</h1>");
+  });
+});
+
+describe("buildBangala prerender path safety", () => {
+  function staticPathsPage(params: string): string {
+    return [
+      "---",
+      "export async function getStaticPaths() {",
+      `  return [{ params: ${params} }]`,
+      "}",
+      "---",
+      "<article>page</article>",
+    ].join("\n");
+  }
+
+  it("refuses a getStaticPaths param of '..' instead of overwriting another page", async () => {
+    const { root } = tmpProject();
+    const route = write(root, "pages/posts/[slug].bangala", staticPathsPage('{ slug: ".." }'));
+
+    const promise = buildBangala({ root, outDir: "out", client: false });
+
+    await expect(promise).rejects.toThrow(route);
+    await expect(promise).rejects.toThrow(/param 'slug'/);
+    expect(existsSync(join(root, "out/index.html"))).toBe(false);
+  });
+
+  it("refuses a getStaticPaths param that tries to climb out of outDir", async () => {
+    const { parent, root } = tmpProject();
+    const route = write(
+      root,
+      "pages/posts/[slug].bangala",
+      staticPathsPage('{ slug: "../../escape" }'),
+    );
+
+    const promise = buildBangala({ root, outDir: "out", client: false });
+
+    await expect(promise).rejects.toThrow(route);
+    await expect(promise).rejects.toThrow(/param 'slug'/);
+    expect(existsSync(join(root, "escape"))).toBe(false);
+    expect(existsSync(join(parent, "escape"))).toBe(false);
+  });
+
+  it("refuses catch-all getStaticPaths segments that would escape outDir", async () => {
+    const { root } = tmpProject();
+    const route = write(
+      root,
+      "pages/docs/[...parts].bangala",
+      staticPathsPage('{ parts: ["..", "..", "escape"] }'),
+    );
+
+    const promise = buildBangala({ root, outDir: "out", client: false });
+
+    await expect(promise).rejects.toThrow(route);
+    await expect(promise).rejects.toThrow(/param 'parts'/);
+    expect(existsSync(join(root, "escape"))).toBe(false);
+  });
+
+  it.each([
+    ["an empty dynamic param", '{ slug: "" }'],
+    ["a '.' dynamic param", '{ slug: "." }'],
+    ["a dynamic param with '/'", '{ slug: "a/b" }'],
+    ["a dynamic param with a backslash", '{ slug: "a\\\\b" }'],
+    ["a dynamic param with a NUL byte", '{ slug: "a\\u0000b" }'],
+  ])("refuses %s from getStaticPaths", async (_label, params) => {
+    const { root } = tmpProject();
+    const route = write(root, "pages/posts/[slug].bangala", staticPathsPage(params));
+
+    const promise = buildBangala({ root, outDir: "out", client: false });
+
+    await expect(promise).rejects.toThrow(route);
+    await expect(promise).rejects.toThrow(/^getStaticPaths for '.*': param 'slug'/);
+  });
+
+  it.each([
+    ["an empty catch-all segment", '{ parts: ["guide", ""] }'],
+    ["a catch-all segment with '/'", '{ parts: ["guide/intro"] }'],
+    ["a catch-all segment with a backslash", '{ parts: ["..\\\\escape"] }'],
+  ])("refuses %s from getStaticPaths", async (_label, params) => {
+    const { root } = tmpProject();
+    write(root, "pages/docs/[...parts].bangala", staticPathsPage(params));
+
+    await expect(buildBangala({ root, outDir: "out", client: false })).rejects.toThrow(
+      /^getStaticPaths for '.*': param 'parts'/,
+    );
+  });
+
+  it("still prerenders legitimate catch-all arrays", async () => {
+    const { root } = tmpProject();
+    write(
+      root,
+      "pages/docs/[...parts].bangala",
+      [
+        "---",
+        "export async function getStaticPaths() {",
+        '  return [{ params: { parts: ["guide", "intro"] } }, { params: { parts: ["faq"] } }]',
+        "}",
+        "---",
+        "<article>{props.params.parts.join(' > ')}</article>",
+      ].join("\n"),
+    );
+
+    const result = await buildBangala({ root, outDir: "out", client: false });
+
+    expect(result.pages.map((page) => page.pathname)).toEqual([
+      "/",
+      "/docs/faq",
+      "/docs/guide/intro",
+    ]);
+    expect(await readFile(join(root, "out/docs/guide/intro/index.html"), "utf8")).toContain(
+      "<article>guide &gt; intro</article>",
+    );
+  });
+
+  it("refuses prerender pathnames that resolve outside outDir", async () => {
+    const { root } = tmpProject();
+    const route = write(root, "pages/docs/[...parts].bangala", "<p>docs</p>");
+
+    const promise = buildBangala({
+      root,
+      outDir: "out",
+      client: false,
+      prerender: ["/docs/../../escape"],
+    });
+
+    await expect(promise).rejects.toThrow(route);
+    await expect(promise).rejects.toThrow("'/docs/../../escape'");
+    await expect(promise).rejects.toThrow(join(root, "escape/index.html"));
+    await expect(promise).rejects.toThrow(/outside outDir/);
+    expect(existsSync(join(root, "escape"))).toBe(false);
+  });
+
+  it("refuses percent-encoded dot segments in prerender pathnames", async () => {
+    const { root } = tmpProject();
+    const route = write(root, "pages/docs/[...parts].bangala", "<p>docs</p>");
+
+    const promise = buildBangala({
+      root,
+      outDir: "out",
+      client: false,
+      prerender: ["/docs/%2E%2E/%2e%2e/escape"],
+    });
+
+    await expect(promise).rejects.toThrow(route);
+    await expect(promise).rejects.toThrow(/param 'parts'/);
+    expect(existsSync(join(root, "out/docs"))).toBe(false);
   });
 });
