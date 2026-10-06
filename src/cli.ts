@@ -210,16 +210,23 @@ async function runBuild(args: string[], io: CliIO): Promise<void> {
     `built ${result.pages.length} page(s) to ${relative(root, result.outDir) || "."}`,
   );
 
+  // The JavaScript pages actually load: the runtime plus the islands. A
+  // site without islands ships none, and gets no size line.
   let clientBytes: number | undefined;
   let clientGzipBytes: number | undefined;
   if (result.clientEntry) {
     try {
-      clientBytes = statSync(result.clientEntry).size;
-      const contents = await readFile(result.clientEntry);
-      clientGzipBytes = gzipSync(contents).length;
+      clientBytes = 0;
+      clientGzipBytes = 0;
+      for (const file of [result.clientEntry, ...result.islands]) {
+        const contents = await readFile(file);
+        clientBytes += statSync(file).size;
+        clientGzipBytes += gzipSync(contents).length;
+      }
     } catch {
       // Bundle file may not exist if a custom Vite config redirected output;
       // skip the size line rather than crashing the CLI.
+      clientBytes = clientGzipBytes = undefined;
     }
   }
 
@@ -231,6 +238,7 @@ async function runBuild(args: string[], io: CliIO): Promise<void> {
       durationMs,
       clientBytes,
       clientGzipBytes,
+      islands: result.islands.length,
     }),
   );
 }

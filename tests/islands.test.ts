@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -250,3 +250,200 @@ describe("islands in the build", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/not bundled because the client build is disabled/));
   });
 });
+
+describe("islands review follow-ups", () => {
+  async function devGet(root: string, url: string, vite?: Record<string, unknown>) {
+    const server = await createBangalaDevServer({ root, vite: { server: { middlewareMode: true }, logLevel: "silent", ...vite } });
+    try {
+      const res = new MockResponse();
+      await new Promise<void>((resolve, reject) => {
+        server.middlewares(new MockRequest(url) as never, res as never, (error?: unknown) =>
+          error ? reject(error) : reject(new Error(`no handler for ${url}`)));
+        res.on("finish", resolve);
+      });
+      return { body: res.body, type: res.getHeader("content-type"), config: server.config };
+    } finally {
+      await server.close();
+    }
+  }
+
+  it("refuses vite.build.outDir instead of emptying it unchecked", async () => {
+    const parent = project({ "www/keep-me.txt": "precious", ...prefix("proj/", { ...COUNTER, "pages/index.bangala": PAGE_WITH_ISLAND }) });
+    await expect(buildBangala({ root: join(parent, "proj"), outDir: "dist", vite: { build: { outDir: "../www" } } }))
+      .rejects.toThrow(/not vite\.build\.outDir/);
+    expect(existsSync(join(parent, "www/keep-me.txt"))).toBe(true);
+    await expect(buildBangala({ root: join(parent, "proj"), vite: { build: { rollupOptions: { input: "x.ts" } } } }))
+      .rejects.toThrow(/rollupOptions\.input is not supported/);
+  });
+
+  it("bundles islands whose folder is a symlink", async () => {
+    const parent = project({ ...prefix("shared/", COUNTER), "app/pages/index.bangala": PAGE_WITH_ISLAND });
+    symlinkSync(join(parent, "shared/components"), join(parent, "app/components"), "dir");
+    await buildBangala({ root: join(parent, "app"), outDir: "dist", vite: { logLevel: "silent" } });
+    const entry = dataEntry(await readFile(join(parent, "app/dist/index.html"), "utf8"));
+    expect(entry).toMatch(/^\/assets\/islands\/Counter\.client-/);
+    expect(existsSync(join(parent, "app/dist", entry))).toBe(true);
+  });
+
+  it("refuses a relative base", async () => {
+    const root = project({ ...COUNTER, "pages/index.bangala": PAGE_WITH_ISLAND });
+    await expect(buildBangala({ root, outDir: "dist", vite: { base: "./" } })).rejects.toThrow(/relative vite\.base/);
+  });
+
+  it("only rewrites its own data-entry placeholders", async () => {
+    const text = "the build marker /@bangala-island/0/ stays";
+    const root = project({
+      ...COUNTER,
+      "pages/index.bangala": `---\nimport Counter from "../components/Counter.bangala"\n---\n<p>${text}</p><Counter start={1} label="/@bangala-island/0/" client:load/>`,
+      "pages/plain.bangala": `<p>${text}</p>`,
+    });
+    await buildBangala({ root, outDir: "dist", vite: { logLevel: "silent" } });
+    const html = await readFile(join(root, "dist/index.html"), "utf8");
+    expect(html).toContain(`<p>${text}</p>`);
+    expect(html).toContain("&quot;label&quot;:&quot;/@bangala-island/0/&quot;");
+    expect(await readFile(join(root, "dist/plain/index.html"), "utf8")).toContain(`<p>${text}</p>`);
+  });
+
+  it("fails the build when an island module has no mount export", async () => {
+    const root = project({
+      "components/B.bangala": "<i>b</i>",
+      "components/B.client.ts": "export default function mount() {}",
+      "pages/index.bangala": "---\nimport B from \"../components/B.bangala\"\n---\n<B client:load/>",
+    });
+    await expect(buildBangala({ root, outDir: "dist", vite: { logLevel: "silent" } }))
+      .rejects.toThrow(/B\.client\.ts' must export a named mount\(el, props\) function \(it exports default\)/);
+  });
+
+  it("follows the runtime file the bundle actually emits", async () => {
+    const root = project({ ...COUNTER, "pages/index.bangala": PAGE_WITH_ISLAND });
+    const result = await buildBangala({
+      root,
+      outDir: "dist",
+      vite: { logLevel: "silent", build: { rollupOptions: { output: { entryFileNames: "js/[name].js" } } } },
+    });
+    const html = await readFile(join(root, "dist/index.html"), "utf8");
+    expect(html).toContain('<script type="module" src="/js/bangala-client.js"></script>');
+    expect(result.clientEntry).toBe(join(root, "dist/js/bangala-client.js"));
+    expect(existsSync(join(root, "dist", dataEntry(html)))).toBe(true);
+  });
+
+  it("bundles only islands that are rendered", async () => {
+    const root = project({
+      ...COUNTER,
+      "components/Heavy.bangala": "<i>heavy</i>",
+      "components/Heavy.client.ts": "export function mount() {}",
+      "pages/index.bangala": "---\nimport Counter from \"../components/Counter.bangala\"\nconst show = false\n---\n<html><body>{#if show}<Counter start={1} client:load/>{/if}</body></html>",
+      "pages/[id].bangala": "---\nimport Heavy from \"../components/Heavy.bangala\"\n---\n<Heavy client:load/>",
+    });
+    const result = await buildBangala({ root, outDir: "dist", vite: { logLevel: "silent" } });
+    expect(existsSync(join(root, "dist/assets/islands"))).toBe(false);
+    expect(result.islands).toEqual([]);
+    expect(result.clientEntry).toBeNull();
+    expect(await readFile(join(root, "dist/index.html"), "utf8")).not.toContain("<script");
+  });
+
+  it("reports the runtime and the islands it bundled", async () => {
+    const root = project({ ...COUNTER, "pages/index.bangala": PAGE_WITH_ISLAND });
+    const result = await buildBangala({ root, outDir: "dist", vite: { logLevel: "silent" } });
+    expect(result.clientEntry).toBe(join(root, "dist/assets/bangala-client.js"));
+    expect(result.islands).toHaveLength(1);
+    expect(result.islands[0]).toMatch(/assets\/islands\/Counter\.client-[\w-]+\.js$/);
+  });
+
+  it("serves hand-written markers' public/ modules to the dev runtime", async () => {
+    const root = project({ "public/islands/X.client.js": "export function mount() {}", "pages/index.bangala": "<p>x</p>" });
+    const response = await devGet(root, "/islands/X.client.js?import");
+    expect(response.type).toBe("text/javascript");
+    expect(response.body).toBe("export function mount() {}");
+  });
+
+  it("refreshes data-entry when an island's client module is created", async () => {
+    const root = project({
+      "components/Counter.bangala": "<button>0</button>",
+      "components/Counter.client.js": "export function mount() {}",
+      "pages/index.bangala": PAGE_WITH_ISLAND,
+    });
+    const server = await createBangalaDevServer({ root, vite: { server: { middlewareMode: true }, logLevel: "silent" } });
+    try {
+      const page = join(root, "pages/index.bangala");
+      const render = async () => ((await server.ssrLoadModule(page)) as { render: (p: object) => Promise<string> }).render({});
+      expect(dataEntry(await render())).toBe("/components/Counter.client.js");
+      writeFileSync(join(root, "components/Counter.client.ts"), "export function mount() {}");
+      server.watcher.emit("add", join(root, "components/Counter.client.ts"));
+      expect(dataEntry(await render())).toBe("/components/Counter.client.ts");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reloads the browser when a server-only import changes", async () => {
+    const root = project({
+      "lib/data.js": "export const title = \"v1\";",
+      "pages/index.bangala": "---\nimport { title } from \"../lib/data.js\"\n---\n<h1>{title}</h1>",
+    });
+    const server = await createBangalaDevServer({ root, vite: { logLevel: "silent" } });
+    try {
+      await server.ssrLoadModule(join(root, "pages/index.bangala"));
+      const send = vi.spyOn(server.ws, "send");
+      writeFileSync(join(root, "lib/data.js"), "export const title = \"v2\";");
+      server.watcher.emit("change", join(root, "lib/data.js"));
+      await vi.waitFor(() => expect(send).toHaveBeenCalledWith({ type: "full-reload" }));
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("allows Vite to serve islands from outside the root", async () => {
+    const parent = project({ ...prefix("ui/", COUNTER), "site/pages/index.bangala": PAGE_WITH_ISLAND.replace("../components/", "../../ui/components/") });
+    const { body, config } = await devGet(join(parent, "site"), "/");
+    expect(dataEntry(body)).toBe(`/@fs/${join(parent, "ui/components/Counter.client.ts").replace(/^\//, "")}`);
+    expect(config.server.fs.allow).toContain(join(parent, "ui/components"));
+  });
+
+  it("serves pages with the plugin in a plain Vite config", async () => {
+    const root = project({ "pages/index.bangala": "<h1>home</h1>" });
+    const { createServer } = await import("vite");
+    const server = await createServer({ root, configFile: false, logLevel: "silent", server: { middlewareMode: true }, plugins: [(await import("../src/vite.js")).bangala()] });
+    try {
+      expect(server.config.appType).toBe("custom");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("lets a middleware host opt into live reload", async () => {
+    const root = project({ "pages/index.bangala": "<h1>home</h1>" });
+    const server = await createBangalaDevServer({ root, vite: { server: { middlewareMode: true, hmr: { port: 0 } }, logLevel: "silent" } });
+    try {
+      expect(server.config.server.ws).not.toBe(false);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("does not depend on unrelated tsconfig files", async () => {
+    const root = project({
+      "tsconfig.json": "{\"extends\": \"@tsconfig/does-not-exist/tsconfig.json\"}",
+      "pages/index.bangala": "---\nconst n: number = 1\n---\n<p>{n}</p>",
+    });
+    expect((await devGet(root, "/")).body).toContain("<p>1</p>");
+  });
+
+  it("warns when the plugin builds islands outside buildBangala", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const root = project({ ...COUNTER, "pages/index.bangala": PAGE_WITH_ISLAND });
+    const { build } = await import("vite");
+    await build({
+      root,
+      configFile: false,
+      logLevel: "warn",
+      plugins: [(await import("../src/vite.js")).bangala({ pages: false })],
+      build: { ssr: "pages/index.bangala", outDir: "dist-ssr", write: false },
+    });
+    expect(warn.mock.calls.flat().join("\n")).toMatch(/islands are only bundled by buildBangala\(\)/);
+  });
+});
+
+function prefix(dir: string, files: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(files).map(([file, contents]) => [`${dir}${file}`, contents]));
+}

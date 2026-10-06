@@ -8,12 +8,15 @@ All notable changes to bangala.js are documented here. Format follows [Keep a Ch
 
 - **Islands work end to end.** `<Counter client:load/>` is hydrated by the sibling `Counter.client.ts` (or `.tsx`, `.mts`, `.js`, `.jsx`, `.mjs`) exporting `mount()`. The dev server serves it as source; `buildBangala()` / `bangala build` bundles only the islands that pages use into `assets/islands/` and rewrites each `data-entry`. A missing client module is a clear error. Before, the compiler emitted `data-entry="./Counter"`, which no browser could load, and the starter hand-wrote its `<bangala-island>` marker.
 - **Live reload in `bangala dev`.** Editing a `.bangala` file reloads the page. The dev server no longer disables Vite's WebSocket, which logged connection errors on every page.
+- `BangalaBuildResult.islands` lists the bundled island modules, and `bangala build` reports their size with the runtime's.
 - `compile()` options `islandEntry` (map an island component to its `data-entry` URL) and `rewriteBangalaImports` (keep `.bangala` specifiers for bundlers that load them).
 - `emptyOutDir` option for `buildBangala()`, mirroring Vite: defaults to `true` when `outDir` is inside the project root; an `outDir` outside the root is only emptied when `emptyOutDir: true` is passed (otherwise existing files are kept and a single warning is printed).
 
 ### Fixed
 
-- TypeScript in the frontmatter now works through the Vite plugin (dev and build); the generated module is transpiled before Vite sees it.
+- TypeScript in the frontmatter now works through the Vite plugin (dev and build); the generated module is transpiled before Vite sees it, without reading the project's `tsconfig.json`.
+- `bangala dev` serves hand-written `<bangala-island data-entry="/islands/x.js">` modules from `public/` (Vite refused the runtime's `?import` request), reloads the page when a server-only import (data file, helper) changes, picks up a client module created or deleted next to a component, and allows islands from outside the project root (monorepos).
+- The `bangala()` plugin sets `appType: "custom"` when it serves pages, so the README's Vite config example no longer answers 404 for every route.
 - `buildBangala()` applies `options.vite` (plugins, `define`, aliases…) when prerendering pages, not only to the client bundle, and prefixes asset URLs with `vite.base`.
 - **The frontmatter is parsed as JavaScript, not as lines of text.** A small JavaScript/TypeScript lexer (`src/jslex.ts`) now drives the frontmatter fence, `import`/`export` hoisting and template `{expr}` scanning, so strings, template literals, comments and regex literals can hold `---`, `{`, `}`, `import` or `export` safely.
   - The frontmatter is emitted byte for byte. Multi-line template literals and line continuations are no longer re-indented (#2).
@@ -35,6 +38,7 @@ All notable changes to bangala.js are documented here. Format follows [Keep a Ch
 
 ### Changed
 
+- `buildBangala()` rejects `vite.build.outDir`, `vite.build.emptyOutDir` and `vite.build.rollupOptions.input` (use its `outDir` / `emptyOutDir` options, which are safety-checked), and a relative `vite.base` (`./`), which prerendered pages at different depths cannot share. `clientEntry` is `null` when no page loads the runtime.
 - The client runtime is only injected into pages that contain an island, so static pages ship no JavaScript (dev and build).
 - `bangala create` scaffolds `<Counter start={0} client:load/>` with `components/Counter.client.js` instead of a hand-written marker and `public/islands/Counter.client.js`.
 - The Vite plugin keeps `.bangala` import specifiers and no longer redirects `./x.js` imports to a sibling `x.bangala`, which hid real `.js` modules; root-absolute and package `.bangala` imports now resolve.

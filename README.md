@@ -178,7 +178,8 @@ The compiled module exports `render(props): Promise<string>`.
 ### Frontmatter
 
 The frontmatter is JavaScript or TypeScript (types are stripped, not
-checked). It is copied verbatim into the page's `render(props)`, except for
+checked, with TypeScript semantics: an import whose bindings are never used
+is removed, so write `import "./setup.js"` for side effects). It is copied verbatim into the page's `render(props)`, except for
 `import` and `export` statements, which are hoisted to module scope:
 
 - Exported declarations (`export function getStaticPaths()`,
@@ -360,7 +361,9 @@ import Counter from "../components/Counter.bangala"
 The dev server serves the client module as source. `bangala build` bundles
 only the islands your pages use into `assets/islands/` and rewrites each
 `data-entry`. Pages without islands ship no JavaScript: the client runtime is
-only added where a `<bangala-island>` appears.
+only added where a `<bangala-island>` appears. An island used by a page that
+is never prerendered (or inside a false `{#if}`) is not bundled, and a client
+module without a named `mount` export fails the build.
 
 ### Island module contract
 
