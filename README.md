@@ -175,6 +175,25 @@ interface IslandRef {
 
 The compiled module exports `render(props): Promise<string>`.
 
+### Frontmatter
+
+The frontmatter is JavaScript or TypeScript (types are stripped, not
+checked; imports and class fields keep their JavaScript meaning). It is copied verbatim into the page's `render(props)`, except for
+`import` and `export` statements, which are hoisted to module scope:
+
+- Exported declarations (`export function getStaticPaths()`,
+  `export const posts = [...]`) run once, at module scope. They cannot see
+  other frontmatter variables or `props`, so export the data they need.
+- `export default`, exporting `render`, and `export { name }` for a name
+  that is not imported or exported are compile errors.
+- `$$bangala` and `$$render` are reserved identifiers, and `children` is a
+  reserved component prop (it carries slot content).
+
+Inside the template, `{expr}` is a JavaScript expression: braces in strings,
+template literals, regexes and comments are handled. `{/* note */}` renders
+nothing, `{}` is an error, and a `//` comment must not hide the closing `}`
+(use `/* */` or end the expression on the next line).
+
 ### `discoverRoutes(root, options?)`
 
 Walks a directory and returns a sorted manifest of `.bangala` page routes.
@@ -240,6 +259,8 @@ await server.listen(5173);
 Bundles `bangala/client/auto` and prerenders HTML files into `outDir`.
 Static routes are prerendered by default. Dynamic routes can opt into static
 generation by exporting `getStaticPaths()` from the page module.
+Like Vite, `outDir` is emptied first only when it is inside `root`; pass
+`emptyOutDir: true` to also empty an `outDir` outside the project.
 
 ```ts
 await buildBangala({
@@ -321,6 +342,27 @@ Every error also dispatches a bubbling `bangala:island-error` `CustomEvent`
 on the affected `<bangala-island>` element, whose `detail` matches the
 `HydrationError` passed to `onError`. A throw from `onError` is swallowed so it
 cannot break the rest of the page.
+
+### Islands
+
+Add `client:load`, `client:idle` or `client:visible` to a component to make
+it an island. Its browser code lives next to it: `Counter.bangala` renders
+the server HTML, and the sibling `Counter.client.ts` (or `.tsx`, `.mts`,
+`.js`, `.jsx`, `.mjs`) exports `mount`.
+
+```bangala
+---
+import Counter from "../components/Counter.bangala"
+---
+<Counter start={0} client:load/>
+```
+
+The dev server serves the client module as source. `bangala build` bundles
+only the islands your pages use into `assets/islands/` and rewrites each
+`data-entry`. Pages without islands ship no JavaScript: the client runtime is
+only added where a `<bangala-island>` appears. An island used by a page that
+is never prerendered (or inside a false `{#if}`) is not bundled, and a client
+module without a named `mount` export fails the build.
 
 ### Island module contract
 

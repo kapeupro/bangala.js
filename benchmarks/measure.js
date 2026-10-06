@@ -112,8 +112,10 @@ function measureBangala() {
   }
   // JS files: only count what the page actually references on first load.
   // For bangala, the page <script> references /assets/bangala-client.js.
-  // Islands are imported dynamically and not part of first-load JS.
-  const jsFiles = walkFiles(join(site, "assets"), (p) => p.endsWith(".js"));
+  // Islands (assets/islands/) are imported dynamically and not part of
+  // first-load JS.
+  const islands = join(site, "assets", "islands");
+  const jsFiles = walkFiles(join(site, "assets"), (p) => p.endsWith(".js") && !p.startsWith(islands));
   const js = sumJs(jsFiles);
   const html = measureHtml(htmlPath);
   result.buildOk = true;

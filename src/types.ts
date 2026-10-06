@@ -64,7 +64,10 @@ export type TemplateNode =
   | SlotNode;
 
 export interface Template {
+  /** Frontmatter code, byte for byte (without the `---` fences). */
   frontmatter: string;
+  /** Offset of the frontmatter code in the .bangala source. */
+  frontmatterOffset: number;
   nodes: TemplateNode[];
 }
 
@@ -72,6 +75,20 @@ export interface Template {
 
 export interface CompileOptions {
   filename: string;
+  /**
+   * Returns the URL written in an island's `data-entry`, given the import
+   * specifier of its component as written (e.g. `"./Counter.bangala"`).
+   * Defaults to the specifier without `.bangala` (`"./Counter"`), which a
+   * bundler has to resolve. The Vite plugin points it at the component's
+   * client module (`Counter.client.ts`).
+   */
+  islandEntry?: (componentPath: string) => string;
+  /**
+   * Rewrite `.bangala` import specifiers to `.js` (default `true`), for
+   * setups that compile every `.bangala` file to a sibling `.js` module.
+   * Bundlers that load `.bangala` files themselves pass `false`.
+   */
+  rewriteBangalaImports?: boolean;
 }
 
 export interface IslandRef {

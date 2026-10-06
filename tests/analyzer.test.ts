@@ -1,12 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "../src/parser.js";
-import { extractImports } from "../src/imports.js";
+import { analyzeFrontmatter } from "../src/frontmatter.js";
 import { analyze } from "../src/analyzer.js";
 
 function analyzeSource(source: string) {
   const tpl = parse(source);
-  const { components } = extractImports(tpl.frontmatter);
-  return analyze(tpl, components);
+  return analyze(tpl, analyzeFrontmatter(tpl.frontmatter));
 }
 
 describe("analyze", () => {

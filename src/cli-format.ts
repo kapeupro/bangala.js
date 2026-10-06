@@ -59,6 +59,8 @@ export interface BuildSummaryOpts {
   durationMs: number;
   clientBytes?: number;
   clientGzipBytes?: number;
+  /** Island modules included in the client size. */
+  islands?: number;
 }
 
 export function buildSummary(opts: BuildSummaryOpts): string {
@@ -71,7 +73,8 @@ export function buildSummary(opts: BuildSummaryOpts): string {
     const sizes = opts.clientGzipBytes !== undefined
       ? `${formatBytes(opts.clientBytes)} ${color("dim", `(${formatBytes(opts.clientGzipBytes)} gzip)`)}`
       : formatBytes(opts.clientBytes);
-    lines.push(`     ${color("dim", "client  ")} ${sizes}`);
+    const parts = opts.islands ? color("dim", ` · runtime + ${opts.islands} island${opts.islands === 1 ? "" : "s"}`) : "";
+    lines.push(`     ${color("dim", "client  ")} ${sizes}${parts}`);
   }
   return lines.join("\n");
 }

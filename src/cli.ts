@@ -210,16 +210,23 @@ async function runBuild(args: string[], io: CliIO): Promise<void> {
     `built ${result.pages.length} page(s) to ${relative(root, result.outDir) || "."}`,
   );
 
+  // The JavaScript pages actually load: the runtime plus the islands. A
+  // site without islands ships none, and gets no size line.
   let clientBytes: number | undefined;
   let clientGzipBytes: number | undefined;
   if (result.clientEntry) {
     try {
-      clientBytes = statSync(result.clientEntry).size;
-      const contents = await readFile(result.clientEntry);
-      clientGzipBytes = gzipSync(contents).length;
+      clientBytes = 0;
+      clientGzipBytes = 0;
+      for (const file of [result.clientEntry, ...result.islands]) {
+        const contents = await readFile(file);
+        clientBytes += statSync(file).size;
+        clientGzipBytes += gzipSync(contents).length;
+      }
     } catch {
       // Bundle file may not exist if a custom Vite config redirected output;
       // skip the size line rather than crashing the CLI.
+      clientBytes = clientGzipBytes = undefined;
     }
   }
 
@@ -231,6 +238,7 @@ async function runBuild(args: string[], io: CliIO): Promise<void> {
       durationMs,
       clientBytes,
       clientGzipBytes,
+      islands: result.islands.length,
     }),
   );
 }
@@ -455,12 +463,7 @@ function templateFiles(
         `      it hydrates as soon as the runtime sees it. Click it.\n` +
         `    </p>\n` +
         `\n` +
-        `    <bangala-island\n` +
-        `      data-entry="/islands/Counter.client.js"\n` +
-        `      data-props={JSON.stringify({ start: 0 })}\n` +
-        `      data-strategy="load">\n` +
-        `      <Counter start={0}/>\n` +
-        `    </bangala-island>\n` +
+        `    <Counter start={0} client:load/>\n` +
         `\n` +
         `    <p class="hint">Edit <code>pages/index.bangala</code> and save — the dev server picks it up.</p>\n` +
         `  </main>\n` +
@@ -473,16 +476,16 @@ function templateFiles(
         `---\n` +
         `// SSR shell for the Counter island. The button label is rendered on the server\n` +
         `// so users see the initial value before any JavaScript runs.\n` +
-        `// The interactive behaviour lives in public/islands/Counter.client.js.\n` +
+        `// The interactive behaviour lives next door, in Counter.client.js.\n` +
         `const start = props.start ?? 0\n` +
         `---\n` +
         `<button class="counter" type="button">Counter: {start}</button>\n`,
     },
     {
-      path: "public/islands/Counter.client.js",
+      path: "components/Counter.client.js",
       contents:
         `// bangala island: Counter\n` +
-        `// Strategy: client:load — hydrates immediately on page load.\n` +
+        `// Hydrates <Counter client:load/>: bangala finds this file next to Counter.bangala.\n` +
         `// Props: { start?: number }\n` +
         `\n` +
         `export async function mount(el, props) {\n` +
@@ -560,13 +563,12 @@ function templateFiles(
         `\n` +
         `## The four files that matter\n` +
         `\n` +
-        `- \`pages/index.bangala\` — the home page. Static markup plus a \`<bangala-island>\` marker that\n` +
-        `  embeds the SSR shell and tells the runtime where to find the JS.\n` +
+        `- \`pages/index.bangala\` — the home page. Static markup plus \`<Counter start={0} client:load/>\`,\n` +
+        `  which renders the counter on the server and hydrates it in the browser.\n` +
         `- \`components/Counter.bangala\` — the **SSR shell** for the counter island. It renders the\n` +
         `  initial button on the server so users see the starting value before any JS runs.\n` +
-        `- \`public/islands/Counter.client.js\` — the **interactive code**. Exports \`mount(el, props)\`.\n` +
-        `  Files under \`public/\` are served as-is, so the marker can reach this at\n` +
-        `  \`/islands/Counter.client.js\`.\n` +
+        `- \`components/Counter.client.js\` — the **interactive code**. Exports \`mount(el, props)\`.\n` +
+        `  bangala finds it next to \`Counter.bangala\`, serves it in dev and bundles it in the build.\n` +
         `- \`public/styles.css\` — global styles.\n` +
         `\n` +
         `## Build\n` +
@@ -672,7 +674,7 @@ function blogTemplateFiles(name: string, version: string): { path: string; conte
         `      excerpt: "A short dispatch on shipping a fast content site with almost no client JavaScript.",\n` +
         `      sections: [\n` +
         `        { heading: "Static first", body: "Bangala prerenders this post from getStaticPaths, so the route can ship as plain HTML." },\n` +
-        `        { heading: "Add islands when needed", body: "Interactive controls can live in public/islands and hydrate only where a page asks for them." },\n` +
+        `        { heading: "Add islands when needed", body: "Interactive controls live next to their component as a .client.js module and hydrate only where a page asks for them." },\n` +
         `      ],\n` +
         `    },\n` +
         `    {\n` +

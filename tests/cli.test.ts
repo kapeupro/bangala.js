@@ -154,6 +154,31 @@ describe("bangala CLI", () => {
     expect(out.join("\n")).toContain("built 1 page(s)");
     await expect(stat(join(root, "dist/index.html"))).resolves.toBeTruthy();
     await expect(stat(join(root, "dist/assets/bangala-client.js"))).resolves.toBeTruthy();
+
+    // The starter's <Counter client:load/> is hydrated by its bundled client module.
+    const html = await readFile(join(root, "dist/index.html"), "utf8");
+    const entry = html.match(/data-entry="(\/assets\/islands\/Counter\.client-[^"]+\.js)"/)?.[1];
+    expect(entry).toBeDefined();
+    await expect(readFile(join(root, "dist", entry!), "utf8")).resolves.toContain("mount");
+    expect(html).toContain('<script type="module" src="/assets/bangala-client.js"></script>');
+  });
+
+  it("refuses to build into the project root and reports why", async () => {
+    const root = join(tmpRoot(), "site");
+    const out: string[] = [];
+    const err: string[] = [];
+    await createProject(root, { packageVersion: "0.4.0" });
+
+    const code = await main(
+      ["build", "--root", root, "--out-dir", "."],
+      { stdout: (line) => out.push(line), stderr: (line) => err.push(line) },
+    );
+
+    expect(code).toBe(1);
+    expect(out.join("\n")).not.toContain("built");
+    expect(err.join("\n")).toContain(`Refusing to use outDir '${root}'`);
+    expect(err.join("\n")).toContain("project root");
+    await expect(stat(join(root, "pages/index.bangala"))).resolves.toBeTruthy();
   });
 });
 

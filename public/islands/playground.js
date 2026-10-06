@@ -122,7 +122,8 @@ export async function mount(el) {
     try {
       if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
       const shimmed = result.code.replace(
-        /import \{[^}]+\} from "bangala\/runtime";?/,
+        // Both the named-import form and the `$$bangala` namespace form.
+        /import (?:\{[^}]+\}|\* as \$\$bangala) from "bangala\/runtime";?/,
         `const escape = (v) => String(v).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const renderComponent = async (Comp, props, children) => Comp.render({ ...props, children: children ? await children() : "" });
 const island = async (Comp, props, entry, strategy) => {
@@ -130,7 +131,9 @@ const island = async (Comp, props, entry, strategy) => {
   const serialized = escape(JSON.stringify(props));
   const strat = strategy.replace(/^client:/, "");
   return \`<bangala-island data-entry="\${entry}" data-props="\${serialized}" data-strategy="\${strat}">\${html}</bangala-island>\`;
-};`,
+};
+const each = async (list, render) => (await Promise.all([...list].map((item) => render(item)))).join("");
+const $$bangala = { escape, renderComponent, island, each };`,
       ).replace(/^import .+ from "[^"]+\.bangala\.js";?$/gm, (line) => {
         const name = line.match(/^import\s+(\w+)/)?.[1] ?? "Comp";
         return `const ${name} = { render: async (p) => "<div data-placeholder>" + ${JSON.stringify(name)} + " (stub)</div>" };`;

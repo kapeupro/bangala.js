@@ -1,16 +1,22 @@
-import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { createReadStream, existsSync, realpathSync, statSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   build as viteBuild,
   createServer as createViteServer,
   mergeConfig,
+  normalizePath,
+  transformWithEsbuild,
   type InlineConfig,
   type Plugin,
+  type ResolvedConfig,
+  type Rollup,
   type ViteDevServer,
 } from "vite";
 import { compile } from "./index.js";
+import { escape } from "./runtime.js";
 import {
   discoverRoutes,
   matchRoute,
@@ -36,6 +42,11 @@ export interface BangalaBuildOptions {
   root?: string;
   pages?: string;
   outDir?: string;
+  /**
+   * Empty outDir before building. Mirrors Vite: defaults to true when outDir is
+   * inside root; an outDir outside root is only emptied when this is true.
+   */
+  emptyOutDir?: boolean;
   /** Extra pathnames to prerender, usually dynamic routes such as /blog/hello. */
   prerender?: string[];
   injectClient?: boolean;
@@ -54,46 +65,151 @@ export interface BangalaBuildResult {
   outDir: string;
   routes: FileRoute[];
   pages: BuiltPage[];
+  /** The client runtime, when at least one page loads it. */
   clientEntry: string | null;
+  /** Bundled island client modules, one per island used by the pages. */
+  islands: string[];
 }
 
 const CLIENT_ENTRY_NAME = "bangala-client";
 const CLIENT_ENTRY_FILE = `assets/${CLIENT_ENTRY_NAME}.js`;
 
+/** Extensions tried, in order, for an island's client module. */
+const CLIENT_MODULE_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".jsx", ".mjs"];
+
+/**
+ * Finds the client module of an island component: `Counter.bangala` is
+ * hydrated by the sibling `Counter.client.ts` (or `.tsx`, `.mts`, `.js`,
+ * `.jsx`, `.mjs`), which exports `mount(el, props, ctx)`.
+ */
+export function findIslandClientModule(componentFile: string): string | null {
+  const base = componentFile.replace(/\.bangala$/, "");
+  for (const extension of CLIENT_MODULE_EXTENSIONS) {
+    const candidate = `${base}.client${extension}`;
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** Maps an island's client module (absolute path) to its `data-entry` URL. */
+type IslandUrl = (clientModule: string) => string;
+
 export function bangala(options: BangalaPluginOptions = {}): Plugin {
+  return bangalaPlugin(options);
+}
+
+function bangalaPlugin(options: BangalaPluginOptions, buildIslandUrl?: IslandUrl): Plugin {
   let projectRoot = process.cwd();
+  let realProjectRoot = projectRoot;
+  let base = "/";
   let pagesRoot: string | null = null;
+  let resolved: ResolvedConfig | null = null;
+  let warnedAboutBuild = false;
+  let devServer: ViteDevServer | null = null;
   const injectClient = options.injectClient ?? true;
+
+  // In dev, Vite serves source files at their root-relative URL (or under
+  // /@fs/ outside the root) and transpiles TypeScript on request.
+  const devIslandUrl: IslandUrl = (file) => {
+    // Module ids are real paths; the root may be reached through a symlink.
+    for (const root of [projectRoot, realProjectRoot]) {
+      if (isWithin(file, root)) return `${base}${toUrlPath(relative(root, file))}`;
+    }
+    // Outside the root (a monorepo package), Vite only serves allowed folders.
+    const allow = resolved?.server.fs.allow;
+    if (allow && !allow.some((dir) => isWithin(file, dir))) allow.push(dirname(file));
+    return `${base}@fs/${toUrlPath(file).replace(/^\//, "")}`;
+  };
 
   return {
     name: "bangala",
     enforce: "pre",
+    config(config) {
+      // Pages are served by this plugin's middleware; Vite's SPA fallback
+      // would rewrite every route to /index.html first.
+      if (options.pages !== false && config.appType === undefined) return { appType: "custom" };
+      return undefined;
+    },
     configResolved(config) {
+      resolved = config;
       projectRoot = config.root;
+      realProjectRoot = realModulePath(config.root);
+      base = config.base.endsWith("/") ? config.base : `${config.base}/`;
       pagesRoot = options.pages === false
         ? null
         : resolve(projectRoot, options.pages ?? "pages");
     },
-    resolveId(source, importer) {
-      const internal = resolveBangalaInternal(source);
-      if (internal) return internal;
-      if (importer && source.endsWith(".js")) {
-        const candidate = resolve(dirname(cleanId(importer)), source.replace(/\.js$/, ".bangala"));
-        if (existsSync(candidate)) return candidate;
-      }
-      return null;
+    resolveId(source) {
+      return resolveBangalaInternal(source);
     },
-    async load(id) {
+    async load(id, loadOptions) {
       const file = cleanId(id);
       if (!file.endsWith(".bangala")) return null;
-      const source = await readFile(file, "utf8");
-      const result = compile(source, { filename: file });
-      for (const dependency of result.dependencies) {
-        this.addWatchFile(resolve(dirname(file), dependency));
+      // .bangala modules render on the server. Refusing browser requests
+      // also keeps /@fs/…/x.bangala from reading files outside fs.allow.
+      if (devServer && !loadOptions?.ssr) {
+        throw new Error(`'${file}' is a server-rendered .bangala module and cannot be loaded in the browser`);
       }
-      return { code: result.code, map: null };
+      const source = await readFile(file, "utf8");
+      const islandUrl = buildIslandUrl ?? devIslandUrl;
+      if (!buildIslandUrl && resolved?.command === "build" && !warnedAboutBuild) {
+        warnedAboutBuild = true;
+        this.warn("islands are only bundled by buildBangala() / `bangala build`; this build keeps their source URLs");
+      }
+      const result = compile(source, {
+        filename: file,
+        // Vite resolves `.bangala` imports itself, through this plugin's load().
+        rewriteBangalaImports: false,
+        islandEntry: (specifier) => islandUrl(islandClientModule(file, specifier, projectRoot)),
+      });
+      for (const dependency of result.dependencies) {
+        if (/^\.{1,2}\//.test(dependency)) this.addWatchFile(resolve(dirname(file), dependency));
+      }
+      // The frontmatter may be TypeScript; Vite only transpiles .ts ids. The
+      // explicit tsconfig keeps unrelated tsconfig.json files out of it and
+      // keeps JavaScript semantics: imports stay even when their bindings
+      // are unused (side effects), and class fields are defined.
+      try {
+        const { code } = await transformWithEsbuild(result.code, `${file}.ts`, { loader: "ts", tsconfigRaw: FRONTMATTER_TSCONFIG });
+        return { code, map: null };
+      } catch (error) {
+        throw new Error(`Could not transpile the compiled module of '${file}': ${(error as Error).message}`);
+      }
+    },
+    hotUpdate({ modules }) {
+      // Pages, components and their server-only imports (data files,
+      // helpers) render on the server, so no client module accepts their
+      // update: reload the browser instead.
+      if (this.environment.name !== "ssr" || modules.length === 0 || !devServer) return undefined;
+      devServer.ws.send({ type: "full-reload" });
+      return [];
     },
     configureServer(server) {
+      devServer = server;
+      // Creating, renaming or deleting an island's client module changes the
+      // data-entry baked into the pages that use it.
+      const onClientModule = (file: string) => {
+        if (!CLIENT_MODULE_RE.test(file)) return;
+        server.moduleGraph.invalidateAll();
+        server.ws.send({ type: "full-reload" });
+      };
+      server.watcher.on("add", onClientModule);
+      server.watcher.on("unlink", onClientModule);
+
+      // The client runtime loads island modules with import(), which Vite
+      // rewrites to request `?import`. Hand-written markers may point at
+      // public/ files, which Vite refuses to serve that way: serve them as-is.
+      server.middlewares.use((req, res, next) => {
+        const publicDir = server.config.publicDir;
+        if (!publicDir || !req.url || !/[?&]import(?:&|=|$)/.test(req.url)) return next();
+        const path = decodeURIComponent(req.url.split("?", 1)[0]!);
+        if (!path.startsWith(base)) return next();
+        const file = resolve(publicDir, `.${path.slice(base.length - 1)}`);
+        if (!isWithin(file, publicDir) || !existsSync(file) || !statSync(file).isFile()) return next();
+        res.setHeader("Content-Type", "text/javascript");
+        createReadStream(file).pipe(res);
+      });
+
       if (!pagesRoot) return undefined;
       return () => {
         server.middlewares.use(async (req, res, next) => {
@@ -111,7 +227,7 @@ export function bangala(options: BangalaPluginOptions = {}): Plugin {
             }
 
             let html = await renderMatchedRoute(server, match);
-            if (injectClient) html = injectDevClient(html);
+            if (injectClient && hasIsland(html)) html = injectDevClient(html);
             html = await server.transformIndexHtml(match.pathname, html);
 
             res.statusCode = 200;
@@ -131,16 +247,27 @@ export function bangala(options: BangalaPluginOptions = {}): Plugin {
   };
 }
 
+const FRONTMATTER_TSCONFIG = JSON.stringify({
+  compilerOptions: { verbatimModuleSyntax: true, useDefineForClassFields: true },
+});
+
+/** An island client module, e.g. `Counter.client.ts`. */
+const CLIENT_MODULE_RE = /\.client\.(?:ts|tsx|mts|js|jsx|mjs)$/;
+
 export async function createBangalaDevServer(
   options: BangalaDevServerOptions = {},
 ): Promise<ViteDevServer> {
   const root = resolve(options.root ?? process.cwd());
+  // A standalone dev server reloads the page when a .bangala file changes.
+  // In middleware mode the host server owns the connection, so live reload
+  // stays off unless the caller configures `server.hmr` (e.g. `hmr.server`).
+  const live = !options.vite?.server?.middlewareMode || options.vite.server.hmr !== undefined;
   const config = mergeConfig(
     {
       root,
       configFile: false,
       appType: "custom",
-      server: { hmr: false, ws: false },
+      server: live ? {} : { hmr: false, ws: false },
       plugins: [bangala({ pages: options.pages ?? "pages", injectClient: options.injectClient })],
     } satisfies InlineConfig,
     options.vite ?? {},
@@ -157,66 +284,203 @@ export async function buildBangala(
   const injectClient = options.injectClient ?? true;
   const buildClient = options.client ?? true;
 
-  if (buildClient) {
-    await viteBuild(mergeConfig(
-      {
-        root,
-        configFile: false,
-        appType: "custom",
-        plugins: [bangala({ pages: false })],
-        build: {
-          outDir,
-          emptyOutDir: true,
-          rollupOptions: {
-            input: { [CLIENT_ENTRY_NAME]: "bangala/client/auto" },
-            output: {
-              entryFileNames: "assets/[name].js",
-              chunkFileNames: "assets/[name]-[hash].js",
-              assetFileNames: "assets/[name]-[hash][extname]",
-            },
-          },
-        },
-      } satisfies InlineConfig,
-      options.vite ?? {},
-    ));
-  } else {
-    await rm(outDir, { recursive: true, force: true });
+  // Vite copies publicDir into outDir, so the two must not overlap either.
+  const publicDir = options.vite?.publicDir === false
+    ? null
+    : resolve(root, options.vite?.publicDir || "public");
+  assertSafeOutDir(outDir, root, pagesRoot, publicDir);
+  const emptyOutDir = options.emptyOutDir ?? isWithin(outDir, root);
+  if (options.emptyOutDir === undefined && !emptyOutDir) {
+    console.warn(
+      `bangala: outDir '${outDir}' is outside the project root '${root}' and will not be emptied. ` +
+        "Pass emptyOutDir: true to empty it before building.",
+    );
   }
 
-  const server = await createViteServer({
-    root,
-    configFile: false,
-    appType: "custom",
-    server: { middlewareMode: true, hmr: false, ws: false },
-    plugins: [bangala({ pages: false })],
-  });
+  const userBuild = options.vite?.build;
+  if (userBuild?.outDir !== undefined || userBuild?.emptyOutDir !== undefined) {
+    throw new Error(
+      "Set the output folder with buildBangala({ outDir, emptyOutDir }) (or --out-dir), not vite.build.outDir / vite.build.emptyOutDir: " +
+        "bangala checks that folder before emptying it.",
+    );
+  }
+  if (userBuild?.rollupOptions?.input !== undefined) {
+    throw new Error("vite.build.rollupOptions.input is not supported: bangala builds the client runtime and island entries itself.");
+  }
+  const base = buildBase(options.vite?.base);
 
+  // Pages render first, so the islands they actually use are known before
+  // the client bundle is built. Their `data-entry` holds a per-build
+  // placeholder until the bundle names the files.
+  const placeholder = `/@bangala-island-${randomUUID()}/`;
+  const islandModules: string[] = [];
+  const islandUrl: IslandUrl = (file) => {
+    const key = realModulePath(file);
+    let index = islandModules.indexOf(key);
+    if (index === -1) index = islandModules.push(key) - 1;
+    return `${placeholder}${index}/`;
+  };
+  const entryRe = new RegExp(`data-entry="${escapeRegExp(placeholder)}(\\d+)/"`, "g");
+
+  const server = await createViteServer(mergeConfig(
+    {
+      root,
+      configFile: false,
+      appType: "custom",
+      server: { middlewareMode: true, hmr: false, ws: false },
+      plugins: [bangalaPlugin({ pages: false }, islandUrl)],
+    } satisfies InlineConfig,
+    options.vite ?? {},
+  ));
+
+  let routes: FileRoute[] = [];
+  const rendered: { file: string; match: RouteMatch; html: string }[] = [];
   try {
-    const routes = await discoverRoutes(pagesRoot);
+    routes = await discoverRoutes(pagesRoot);
     const pathnames = await pathnamesToPrerender(server, routes, options.prerender ?? []);
-    const pages: BuiltPage[] = [];
-
     for (const pathname of pathnames) {
       const match = matchRoute(routes, pathname);
       if (!match) throw new Error(`No route matches prerender path '${pathname}'`);
-      let html = await renderMatchedRoute(server, match);
-      if (injectClient && buildClient) html = injectBuildClient(html, `/${CLIENT_ENTRY_FILE}`);
       const file = outputFileForPathname(outDir, pathname);
-      await mkdir(dirname(file), { recursive: true });
-      await writeFile(file, html);
-      pages.push({ pathname: match.pathname, file, route: match.route, params: match.params });
+      assertSafePrerenderTarget(outDir, pathname, match, file);
+      rendered.push({ file, match, html: await renderMatchedRoute(server, match) });
     }
-
-    return {
-      outDir,
-      routes,
-      pages,
-      clientEntry: buildClient ? join(outDir, CLIENT_ENTRY_FILE) : null,
-    };
   } finally {
     await server.close();
   }
+
+  // Only islands that made it into a rendered page are bundled: a module
+  // compiled for a route that is never prerendered, or inside a false
+  // {#if}, ships nothing.
+  const used = new Set<number>();
+  for (const page of rendered) {
+    for (const [, index] of page.html.matchAll(entryRe)) used.add(Number(index));
+  }
+  const pagesWithIslands = rendered.filter((page) => hasIsland(page.html)).length;
+
+  const builtIslands = new Map<number, string>();
+  let runtimeFile: string | null = null;
+  if (buildClient) {
+    const input: Record<string, string> = { [CLIENT_ENTRY_NAME]: "bangala/client/auto" };
+    const inputIndex = new Map<string, number>();
+    for (const index of used) {
+      const file = islandModules[index]!;
+      // Rollup input names must be unique; the file name stays readable.
+      let name = `islands/${basename(file).replace(/\.[^.]+$/, "")}`;
+      if (name in input) name = `${name}-${index}`;
+      input[name] = file;
+      inputIndex.set(file, index);
+    }
+    const output = await viteBuild(mergeConfig(
+      mergeConfig(
+        {
+          root,
+          configFile: false,
+          appType: "custom",
+          logLevel: "warn",
+          plugins: [bangala({ pages: false })],
+          build: {
+            rollupOptions: {
+              // Keep island exports (`mount`) even though no other entry imports them.
+              preserveEntrySignatures: "exports-only",
+              output: {
+                entryFileNames: (chunk) =>
+                  chunk.name === CLIENT_ENTRY_NAME ? "assets/[name].js" : "assets/[name]-[hash].js",
+                chunkFileNames: "assets/[name]-[hash].js",
+                assetFileNames: "assets/[name]-[hash][extname]",
+              },
+            },
+          },
+        } satisfies InlineConfig,
+        options.vite ?? {},
+      ),
+      // bangala owns these, after its outDir checks.
+      { build: { outDir, emptyOutDir, rollupOptions: { input } } } satisfies InlineConfig,
+    ));
+    for (const result of Array.isArray(output) ? output : [output as Rollup.RollupOutput]) {
+      for (const item of result.output ?? []) {
+        if (item.type !== "chunk" || !item.isEntry) continue;
+        if (item.name === CLIENT_ENTRY_NAME) {
+          runtimeFile = item.fileName;
+          continue;
+        }
+        const index = item.facadeModuleId ? inputIndex.get(realModulePath(item.facadeModuleId)) : undefined;
+        if (index === undefined) continue;
+        if (!item.exports.includes("mount")) {
+          const found = item.exports.length ? `it exports ${item.exports.join(", ")}` : "it has no exports";
+          throw new Error(
+            `Island client module '${islandModules[index]}' must export a named mount(el, props) function (${found}).`,
+          );
+        }
+        builtIslands.set(index, item.fileName);
+      }
+    }
+    for (const index of used) {
+      if (!builtIslands.has(index)) {
+        throw new Error(`Island client module '${islandModules[index]}' was not emitted by the client build.`);
+      }
+    }
+  } else {
+    if (emptyOutDir) await rm(outDir, { recursive: true, force: true });
+    if (used.size > 0) {
+      console.warn(
+        `bangala: ${used.size} island client module(s) are not bundled because the client build is disabled; ` +
+          "their data-entry points at the source files.",
+      );
+    }
+  }
+
+  const loadsRuntime = Boolean(injectClient && runtimeFile && pagesWithIslands > 0);
+  const pages: BuiltPage[] = [];
+  for (const { file, match, html: renderedHtml } of rendered) {
+    let html = renderedHtml.replace(entryRe, (attribute, index: string) => {
+      const source = islandModules[Number(index)];
+      if (!source) return attribute;
+      const built = builtIslands.get(Number(index));
+      return `data-entry="${escape(built ? `${base}${built}` : `${base}${toUrlPath(relative(realModulePath(root), source))}`)}"`;
+    });
+    if (loadsRuntime && hasIsland(html)) html = injectBuildClient(html, `${base}${runtimeFile}`);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, html);
+    pages.push({ pathname: match.pathname, file, route: match.route, params: match.params });
+  }
+
+  return {
+    outDir,
+    routes,
+    pages,
+    clientEntry: loadsRuntime ? join(outDir, runtimeFile!) : null,
+    islands: [...builtIslands.values()].map((file) => join(outDir, file)),
+  };
 }
+
+/**
+ * The URL prefix of built assets. A relative base ('./') would make every
+ * page resolve assets against its own folder, which prerendered pages at
+ * different depths cannot share, so it is refused.
+ */
+function buildBase(base: string | undefined): string {
+  if (base === undefined) return "/";
+  if (base === "" || base.startsWith(".")) {
+    throw new Error(`bangala build does not support a relative vite.base ('${base}'): use an absolute base such as '/' or '/app/'.`);
+  }
+  const withLeading = base.startsWith("/") || /^[a-z]+:\/\//i.test(base) ? base : `/${base}`;
+  return withLeading.endsWith("/") ? withLeading : `${withLeading}/`;
+}
+
+/** Canonical path of a module, so symlinked folders compare equal to what Rollup reports. */
+function realModulePath(file: string): string {
+  try {
+    return normalizePath(realpathSync(file));
+  } catch {
+    return normalizePath(file);
+  }
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 
 async function renderMatchedRoute(
   server: ViteDevServer,
@@ -319,6 +583,7 @@ function buildPathnameFromRoute(
           `getStaticPaths for '${route.file}': param '${seg.name}' must be a string`,
         );
       }
+      assertStaticPathSegment(route, seg.name, v);
       parts.push(encodeURIComponent(v));
     } else {
       // catch-all
@@ -328,10 +593,97 @@ function buildPathnameFromRoute(
           `getStaticPaths for '${route.file}': catch-all param '${seg.name}' must be a string[]`,
         );
       }
+      // Each item becomes one path segment, so it obeys the same rules.
+      for (const s of v) assertStaticPathSegment(route, seg.name, String(s));
       parts.push(...v.map((s) => encodeURIComponent(s)));
     }
   }
   return parts.length === 0 ? "/" : "/" + parts.join("/");
+}
+
+function assertStaticPathSegment(route: FileRoute, name: string, value: string): void {
+  const reason = unsafeSegmentReason(value);
+  if (reason) {
+    throw new Error(
+      `getStaticPaths for '${route.file}': param '${name}' ${reason} (got ${JSON.stringify(value)}); ` +
+        "each value must be a single, non-empty path segment",
+    );
+  }
+}
+
+/**
+ * Explains why a param value cannot be written as exactly one directory under
+ * outDir (it would collapse, climb out, or split into several), or null.
+ */
+function unsafeSegmentReason(value: string): string | null {
+  if (value === "") return "is empty";
+  if (value === "." || value === "..") return `is a '${value}' path segment`;
+  if (value.includes("/")) return "contains '/'";
+  if (value.includes("\\")) return "contains '\\'";
+  if (value.includes("\0")) return "contains a NUL byte";
+  return null;
+}
+
+/**
+ * Last check before a prerendered page is written: the file must stay inside
+ * outDir, and every matched param (decoded, so `%2E%2E` counts as `..`) must
+ * be a plain segment. Covers both getStaticPaths and the `prerender` option.
+ */
+function assertSafePrerenderTarget(
+  outDir: string,
+  pathname: string,
+  match: RouteMatch,
+  file: string,
+): void {
+  const where = `Prerender path '${pathname}' for '${match.route.file}'`;
+  if (!isWithin(file, outDir)) {
+    throw new Error(
+      `${where} (params ${JSON.stringify(match.params)}) resolves to '${file}', ` +
+        `which is outside outDir '${outDir}'`,
+    );
+  }
+  for (const [name, value] of Object.entries(match.params)) {
+    for (const segment of Array.isArray(value) ? value : [value]) {
+      const reason = unsafeSegmentReason(segment);
+      if (reason) throw new Error(`${where}: param '${name}' ${reason}`);
+    }
+  }
+}
+
+/**
+ * Refuses output directories whose emptying or overwriting would destroy
+ * project sources: the filesystem root, the project root or any ancestor of
+ * it, and anything overlapping the pages or public directory.
+ */
+function assertSafeOutDir(
+  outDir: string,
+  root: string,
+  pagesRoot: string,
+  publicDir: string | null,
+): void {
+  const refuse = (why: string) =>
+    new Error(`Refusing to use outDir '${outDir}': ${why}. Pick a dedicated folder such as 'dist'.`);
+  if (outDir === parse(outDir).root) {
+    throw refuse("it is the filesystem root");
+  }
+  if (relative(root, outDir) === "") {
+    throw refuse("it is the project root, and emptying it would delete your sources");
+  }
+  if (isWithin(root, outDir)) {
+    throw refuse(`it contains the project root '${root}', and emptying it would delete your sources`);
+  }
+  if (isWithin(outDir, pagesRoot) || isWithin(pagesRoot, outDir)) {
+    throw refuse(`it overlaps the pages directory '${pagesRoot}'`);
+  }
+  if (publicDir && (isWithin(outDir, publicDir) || isWithin(publicDir, outDir))) {
+    throw refuse(`it overlaps the public directory '${publicDir}', whose files Vite copies into outDir`);
+  }
+}
+
+/** True when `child` is `parent` itself or somewhere below it. */
+function isWithin(child: string, parent: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
 function outputFileForPathname(outDir: string, pathname: string): string {
@@ -386,6 +738,42 @@ function localFile(name: string): string {
 
 function cleanId(id: string): string {
   return id.split("?", 1)[0]!;
+}
+
+/** A file path as a URL path: `/` separators, each segment percent-encoded. */
+function toUrlPath(path: string): string {
+  return path.split(sep).map(encodeURIComponent).join("/");
+}
+
+/** True when the HTML holds an island marker, i.e. needs the client runtime. */
+function hasIsland(html: string): boolean {
+  return /<bangala-island[\s>]/i.test(html);
+}
+
+/**
+ * Resolves the client module of the island component imported as
+ * `specifier` from `importer`, or explains what is missing.
+ */
+function islandClientModule(importer: string, specifier: string, root: string): string {
+  let componentFile: string;
+  if (/^\.{1,2}\//.test(specifier)) componentFile = resolve(dirname(importer), specifier);
+  else if (specifier.startsWith("/")) componentFile = join(root, specifier);
+  else {
+    throw new Error(
+      `Island component "${specifier}" in '${importer}' must be imported with a relative path ` +
+        `('./' or '../') so its client module can be found next to it`,
+    );
+  }
+  if (!existsSync(componentFile)) {
+    throw new Error(`Island component "${specifier}" imported in '${importer}' was not found at '${componentFile}'.`);
+  }
+  const clientModule = findIslandClientModule(componentFile);
+  if (clientModule) return clientModule;
+  const name = basename(componentFile).replace(/\.bangala$/, "");
+  throw new Error(
+    `Island <${name}> in '${importer}' has no client module. Create '${name}.client.ts' (or .js) ` +
+      `next to '${componentFile}', exporting mount(el, props).`,
+  );
 }
 
 export { type FileRoute } from "./router.js";

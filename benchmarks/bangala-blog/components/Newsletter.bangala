@@ -1,6 +1,6 @@
 ---
 // SSR markup for the newsletter form. The interactive behaviour lives
-// in /islands/newsletter.js and the bangala client runtime mounts it.
+// next door in Newsletter.client.js, which the bangala client runtime mounts.
 ---
 <form class="newsletter">
   <label for="nl-email">Sign up for the newsletter</label>

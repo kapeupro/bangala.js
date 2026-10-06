@@ -456,6 +456,10 @@ extension). Cette valeur **ne résout pas dans un navigateur**. Trois implicatio
 Le runtime reste pur. Aucune connaissance des paths, des extensions, ou des
 conventions de build n'entre dans `bangala/client`.
 
+> Mise à jour 2026-10-06 : la résolution est implémentée par le plugin Vite,
+> voir `2026-10-06-islands-pipeline-design.md` (module client voisin
+> `Counter.client.ts`, URL source en dev, bundle haché en build).
+
 ## 8. Changements requis sur le compilateur (sous-projet 1)
 
 Pour que `data-strategy="idle"` et `data-strategy="visible"` puissent être
