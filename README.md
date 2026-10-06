@@ -178,8 +178,7 @@ The compiled module exports `render(props): Promise<string>`.
 ### Frontmatter
 
 The frontmatter is JavaScript or TypeScript (types are stripped, not
-checked, with TypeScript semantics: an import whose bindings are never used
-is removed, so write `import "./setup.js"` for side effects). It is copied verbatim into the page's `render(props)`, except for
+checked; imports and class fields keep their JavaScript meaning). It is copied verbatim into the page's `render(props)`, except for
 `import` and `export` statements, which are hoisted to module scope:
 
 - Exported declarations (`export function getStaticPaths()`,

@@ -444,6 +444,89 @@ describe("islands review follow-ups", () => {
   });
 });
 
+describe("islands review follow-ups (second pass)", () => {
+  async function devPage(root: string, page = "pages/index.bangala"): Promise<string> {
+    const server = await createBangalaDevServer({ root, vite: { server: { middlewareMode: true }, logLevel: "silent" } });
+    try {
+      return await ((await server.ssrLoadModule(join(root, page))) as { render: (p: object) => Promise<string> }).render({});
+    } finally {
+      await server.close();
+    }
+  }
+
+  it("keeps JavaScript semantics in frontmatter: side-effect imports and class fields", async () => {
+    const root = project({
+      "lib/register.js": "globalThis.__registered = (globalThis.__registered ?? 0) + 1; export const marker = 1;",
+      "pages/index.bangala": [
+        "---",
+        "import { marker } from \"../lib/register.js\"",
+        "class Base { set value(v) { this._v = \"setter\" } get value() { return this._v } }",
+        "class Child extends Base { value = \"field\" }",
+        "const own = Object.prototype.hasOwnProperty.call(new Child(), \"value\")",
+        "---",
+        "<p>{String(globalThis.__registered > 0)} {String(own)}</p>",
+      ].join("\n"),
+    });
+    expect(await devPage(root)).toBe("<p>true true</p>");
+  });
+
+  it("still accepts types imported without `import type`", async () => {
+    const root = project({
+      "lib/types.ts": "export interface Props { title: string }",
+      "pages/index.bangala": "---\nimport { Props } from \"../lib/types.ts\"\nconst p: Props = { title: \"typed\" }\n---\n<p>{p.title}</p>",
+    });
+    expect(await devPage(root)).toBe("<p>typed</p>");
+  });
+
+  it("serves islands of a project reached through a symlink", async () => {
+    const parent = project(prefix("real/", { ...COUNTER, "pages/index.bangala": PAGE_WITH_ISLAND }));
+    symlinkSync(join(parent, "real"), join(parent, "link"), "dir");
+    expect(dataEntry(await devPage(join(parent, "link")))).toBe("/components/Counter.client.ts");
+  });
+
+  it("percent-encodes island URLs", async () => {
+    const root = project({
+      "components/100%off.bangala": "<b/>",
+      "components/100%off.client.js": "export function mount() {}",
+      "pages/index.bangala": "---\nimport A from \"../components/100%off.bangala\"\n---\n<A client:load/>",
+    });
+    expect(dataEntry(await devPage(root))).toBe("/components/100%25off.client.js");
+  });
+
+  it("reports a missing island component, not a missing client module", async () => {
+    const root = project({ ...COUNTER, "pages/index.bangala": PAGE_WITH_ISLAND.replace(/Counter/g, "Countr") });
+    await expect(devPage(root)).rejects.toThrow(/Island component "\.\.\/components\/Countr\.bangala" imported in .* was not found/);
+  });
+
+  it("unescapes import specifiers", async () => {
+    const root = project({
+      "components/it's.bangala": "<b/>",
+      "components/it's.client.js": "export function mount() {}",
+      "pages/index.bangala": "---\nimport A from '../components/it\\'s.bangala'\n---\n<A client:load/>",
+    });
+    expect(dataEntry(await devPage(root))).toBe("/components/it&#39;s.client.js");
+  });
+
+  it("does not serve .bangala modules to the browser", async () => {
+    const root = project({ "pages/index.bangala": "<p>secret</p>" });
+    const server = await createBangalaDevServer({ root, vite: { server: { middlewareMode: true }, logLevel: "silent" } });
+    try {
+      await expect(server.transformRequest("/pages/index.bangala")).rejects.toThrow(/server-rendered \.bangala module/);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("builds the repo's benchmark app with its island", async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "bangala-bench-"));
+    roots.push(outDir);
+    const root = join(import.meta.dirname, "../benchmarks/bangala-blog");
+    await buildBangala({ root, outDir, emptyOutDir: true, vite: { logLevel: "silent" } });
+    const html = await readFile(join(outDir, "index.html"), "utf8");
+    expect(existsSync(join(outDir, dataEntry(html)))).toBe(true);
+  });
+});
+
 function prefix(dir: string, files: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(files).map(([file, contents]) => [`${dir}${file}`, contents]));
 }

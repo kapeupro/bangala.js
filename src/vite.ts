@@ -100,6 +100,7 @@ export function bangala(options: BangalaPluginOptions = {}): Plugin {
 
 function bangalaPlugin(options: BangalaPluginOptions, buildIslandUrl?: IslandUrl): Plugin {
   let projectRoot = process.cwd();
+  let realProjectRoot = projectRoot;
   let base = "/";
   let pagesRoot: string | null = null;
   let resolved: ResolvedConfig | null = null;
@@ -110,11 +111,14 @@ function bangalaPlugin(options: BangalaPluginOptions, buildIslandUrl?: IslandUrl
   // In dev, Vite serves source files at their root-relative URL (or under
   // /@fs/ outside the root) and transpiles TypeScript on request.
   const devIslandUrl: IslandUrl = (file) => {
-    if (isWithin(file, projectRoot)) return `${base}${toPosix(relative(projectRoot, file))}`;
+    // Module ids are real paths; the root may be reached through a symlink.
+    for (const root of [projectRoot, realProjectRoot]) {
+      if (isWithin(file, root)) return `${base}${toUrlPath(relative(root, file))}`;
+    }
     // Outside the root (a monorepo package), Vite only serves allowed folders.
     const allow = resolved?.server.fs.allow;
     if (allow && !allow.some((dir) => isWithin(file, dir))) allow.push(dirname(file));
-    return `${base}@fs/${toPosix(file).replace(/^\//, "")}`;
+    return `${base}@fs/${toUrlPath(file).replace(/^\//, "")}`;
   };
 
   return {
@@ -129,6 +133,7 @@ function bangalaPlugin(options: BangalaPluginOptions, buildIslandUrl?: IslandUrl
     configResolved(config) {
       resolved = config;
       projectRoot = config.root;
+      realProjectRoot = realModulePath(config.root);
       base = config.base.endsWith("/") ? config.base : `${config.base}/`;
       pagesRoot = options.pages === false
         ? null
@@ -137,9 +142,14 @@ function bangalaPlugin(options: BangalaPluginOptions, buildIslandUrl?: IslandUrl
     resolveId(source) {
       return resolveBangalaInternal(source);
     },
-    async load(id) {
+    async load(id, loadOptions) {
       const file = cleanId(id);
       if (!file.endsWith(".bangala")) return null;
+      // .bangala modules render on the server. Refusing browser requests
+      // also keeps /@fs/…/x.bangala from reading files outside fs.allow.
+      if (devServer && !loadOptions?.ssr) {
+        throw new Error(`'${file}' is a server-rendered .bangala module and cannot be loaded in the browser`);
+      }
       const source = await readFile(file, "utf8");
       const islandUrl = buildIslandUrl ?? devIslandUrl;
       if (!buildIslandUrl && resolved?.command === "build" && !warnedAboutBuild) {
@@ -155,10 +165,12 @@ function bangalaPlugin(options: BangalaPluginOptions, buildIslandUrl?: IslandUrl
       for (const dependency of result.dependencies) {
         if (/^\.{1,2}\//.test(dependency)) this.addWatchFile(resolve(dirname(file), dependency));
       }
-      // The frontmatter may be TypeScript; Vite only transpiles .ts ids. An
-      // explicit tsconfig keeps unrelated tsconfig.json files out of it.
+      // The frontmatter may be TypeScript; Vite only transpiles .ts ids. The
+      // explicit tsconfig keeps unrelated tsconfig.json files out of it and
+      // keeps JavaScript semantics: imports stay even when their bindings
+      // are unused (side effects), and class fields are defined.
       try {
-        const { code } = await transformWithEsbuild(result.code, `${file}.ts`, { loader: "ts", tsconfigRaw: "{}" });
+        const { code } = await transformWithEsbuild(result.code, `${file}.ts`, { loader: "ts", tsconfigRaw: FRONTMATTER_TSCONFIG });
         return { code, map: null };
       } catch (error) {
         throw new Error(`Could not transpile the compiled module of '${file}': ${(error as Error).message}`);
@@ -234,6 +246,10 @@ function bangalaPlugin(options: BangalaPluginOptions, buildIslandUrl?: IslandUrl
     },
   };
 }
+
+const FRONTMATTER_TSCONFIG = JSON.stringify({
+  compilerOptions: { verbatimModuleSyntax: true, useDefineForClassFields: true },
+});
 
 /** An island client module, e.g. `Counter.client.ts`. */
 const CLIENT_MODULE_RE = /\.client\.(?:ts|tsx|mts|js|jsx|mjs)$/;
@@ -317,9 +333,10 @@ export async function buildBangala(
     options.vite ?? {},
   ));
 
-  const routes = await discoverRoutes(pagesRoot);
+  let routes: FileRoute[] = [];
   const rendered: { file: string; match: RouteMatch; html: string }[] = [];
   try {
+    routes = await discoverRoutes(pagesRoot);
     const pathnames = await pathnamesToPrerender(server, routes, options.prerender ?? []);
     for (const pathname of pathnames) {
       const match = matchRoute(routes, pathname);
@@ -420,7 +437,7 @@ export async function buildBangala(
       const source = islandModules[Number(index)];
       if (!source) return attribute;
       const built = builtIslands.get(Number(index));
-      return `data-entry="${escape(built ? `${base}${built}` : `${base}${toPosix(relative(root, source))}`)}"`;
+      return `data-entry="${escape(built ? `${base}${built}` : `${base}${toUrlPath(relative(realModulePath(root), source))}`)}"`;
     });
     if (loadsRuntime && hasIsland(html)) html = injectBuildClient(html, `${base}${runtimeFile}`);
     await mkdir(dirname(file), { recursive: true });
@@ -723,8 +740,9 @@ function cleanId(id: string): string {
   return id.split("?", 1)[0]!;
 }
 
-function toPosix(path: string): string {
-  return path.split(sep).join("/");
+/** A file path as a URL path: `/` separators, each segment percent-encoded. */
+function toUrlPath(path: string): string {
+  return path.split(sep).map(encodeURIComponent).join("/");
 }
 
 /** True when the HTML holds an island marker, i.e. needs the client runtime. */
@@ -745,6 +763,9 @@ function islandClientModule(importer: string, specifier: string, root: string): 
       `Island component "${specifier}" in '${importer}' must be imported with a relative path ` +
         `('./' or '../') so its client module can be found next to it`,
     );
+  }
+  if (!existsSync(componentFile)) {
+    throw new Error(`Island component "${specifier}" imported in '${importer}' was not found at '${componentFile}'.`);
   }
   const clientModule = findIslandClientModule(componentFile);
   if (clientModule) return clientModule;

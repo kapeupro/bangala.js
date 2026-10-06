@@ -119,7 +119,17 @@ const NAMED_DECLARATIONS = new Set(["class", "interface", "type", "enum", "names
 
 const isPunct = (t: Token | undefined, value: string) => t?.kind === "punct" && t.value === value;
 const isIdent = (t: Token | undefined, value: string) => t?.kind === "ident" && t.value === value;
-const unquote = (t: Token) => t.value.slice(1, -1);
+/** The value of a string (or substitution-free template) literal token. */
+const unquote = (t: Token) => unescapeString(t.value.slice(1, -1));
+
+function unescapeString(text: string): string {
+  if (!text.includes("\\")) return text;
+  return text.replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g, (_, esc: string) => {
+    if ((esc[0] === "u" || esc[0] === "x") && esc.length > 1) return String.fromCodePoint(parseInt(esc.replace(/^[ux]\{?|\}$/g, ""), 16));
+    if (esc === "\r\n" || esc === "\n" || esc === "\r" || esc === "\u2028" || esc === "\u2029") return "";
+    return ({ n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", "0": "\0" } as Record<string, string>)[esc] ?? esc;
+  });
+}
 const withoutQuery = (specifier: string) => specifier.split("?", 1)[0]!;
 
 export interface FrontmatterOptions {

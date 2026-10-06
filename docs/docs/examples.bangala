@@ -102,7 +102,7 @@ const headings = [
   <h2 id="island">Counter island</h2>
   <p>Server-render the initial HTML with a Bangala component, then hydrate only that component with a browser module.</p>
   <CodeBlock filename="pages/index.bangala" code={islandPage}/>
-  <CodeBlock filename="public/islands/counter.js" lang="js" code={islandClient}/>
+  <CodeBlock filename="components/Counter.client.js" lang="js" code={islandClient}/>
 
   <h2 id="deploy">Deploy</h2>
   <p>The static build can be uploaded anywhere. Adapters only write host config.</p>

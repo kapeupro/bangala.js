@@ -28,8 +28,9 @@ Vite. Build output: `bangala-blog/_site/`.
 
 - HTML: `_site/index.html`
 - JS: `_site/assets/*.js` (only `bangala-client.js` is referenced on first
-  load; the newsletter island is fetched dynamically and intentionally NOT
-  counted as first-load JS — see `measure.js` for the rationale)
+  load; the newsletter island, bundled to `_site/assets/islands/`, is fetched
+  dynamically and intentionally NOT counted as first-load JS — see
+  `measure.js` for the rationale)
 
 ### `nextjs-blog/`
 
